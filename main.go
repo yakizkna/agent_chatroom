@@ -11,6 +11,11 @@ import (
 func main() {
 	r := gin.Default()
 
+	// 根路径重定向到沟通室页面（直接访问 :8093/ 也能打开，而非 404）
+	r.GET("/", func(c *gin.Context) {
+		c.Redirect(302, "/chatroom")
+	})
+
 	// 沟通室页面（纯静态文件）
 	r.StaticFile("/chatroom", "./static/pages/chatroom.html")
 

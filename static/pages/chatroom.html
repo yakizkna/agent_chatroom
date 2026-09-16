@@ -10,7 +10,7 @@
   * { box-sizing: border-box; }
   body { margin:0; padding:28px; background:var(--bg); color:var(--ink);
          font:14px/1.7 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
-  h1 { font-size:20px; margin:0 0 4px; }
+  h1 { font-size:20px; margin:0 0 38px; display:flex; align-items:center; gap:10px; }
   h1 .roomsel { font-size:13px; vertical-align:2px; margin-left:10px; background:#0b0d12; color:var(--ink);
                 border:1px solid var(--line); border-radius:6px; padding:3px 8px; outline:none; }
   h1 .roomsel:focus { border-color:var(--acc); }
@@ -118,18 +118,11 @@
   .err { color:var(--bad); }
   .ok { color:var(--ok); }
   .spinner { color:var(--acc); }
-  /* 顶部导航栏 */
-  .nav { display:flex; align-items:center; gap:6px; margin-bottom:20px;
-         padding-bottom:14px; border-bottom:1px solid var(--line); }
-  .nav .brand { display:flex; align-items:center; margin-right:12px; }
-  .nav .brand img { width:29px; height:29px; display:block;
-                    border-radius:7px; box-shadow: inset 0 0 0 1.5px #7aa2ff;
-                    transform: scale(1.25); }  /* 沟通室图标：放大裁剪去四角底色 + 蓝色细边 */
-  .nav a { text-decoration:none; color:var(--soft); font-size:13.5px;
-           padding:6px 16px; border:1px solid transparent; border-radius:8px; }
-  .nav a:hover { color:var(--ink); }
-  .nav a.active { color:var(--ink); background:#1f2632; border-color:var(--line); }
-  .nav .spacer { flex:1; }
+  /* 标题行（含房间下拉与登出） */
+  h1 .roomsel { width:auto; min-width:150px; }
+  h1 .logout { text-decoration:none; color:var(--soft); font-size:13px;
+               padding:4px 12px; border:1px solid var(--line); border-radius:8px; }
+  h1 .logout:hover { color:var(--ink); border-color:var(--acc); }
   /* 登录门禁 */
   .login { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
            background:rgba(8,10,14,.93); z-index:50; }
@@ -154,14 +147,7 @@
     </div>
   </div>
 
-  <nav class="nav">
-    <span class="brand"><a href="/"><img src="/static/images/chatroom-icon.jpg" alt=""></a></span>
-    <a href="/">首页</a>
-    <a href="/chatroom" class="active">沟通室</a>
-    <span class="spacer"></span>
-    <a href="javascript:logout()" id="logoutBtn">登出</a>
-  </nav>
-  <h1>沟通室 · CHAT <select id="roomSel" class="roomsel" title="切换聊天室" disabled></select></h1>
+  <h1>沟通室 · CHAT <select id="roomSel" class="roomsel" title="切换聊天室" disabled></select><span style="flex:1"></span><a href="javascript:logout()" id="logoutBtn" class="logout">登出</a></h1>
 
   <div class="panel">
     <label class="fld"><span class="lbl">发件人</span><input id="from" class="f" type="text" placeholder="发件人自定义" title="发件人；留空＝不写入" autocomplete="off"></label>

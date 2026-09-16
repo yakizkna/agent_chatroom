@@ -1,2 +1,4 @@
 agent_chatroom
 .env
+agent_chatroom.log
+agent_chatroom.pid
