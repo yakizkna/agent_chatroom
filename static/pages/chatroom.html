@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>沟通室 · RA</title>
+<link rel="icon" href="/static/images/chatroom-icon.jpg">
+<style>
+  :root { --bg:#0f1115; --card:#171a21; --line:#262b36; --ink:#e6e8ee;
+          --soft:#9aa3b2; --ok:#34d399; --bad:#f87171; --acc:#60a5fa; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:28px; background:var(--bg); color:var(--ink);
+         font:14px/1.7 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  h1 .roomsel { font-size:13px; vertical-align:2px; margin-left:10px; background:#0b0d12; color:var(--ink);
+                border:1px solid var(--line); border-radius:6px; padding:3px 8px; outline:none; }
+  h1 .roomsel:focus { border-color:var(--acc); }
+  h1 .roomsel:disabled { opacity:.5; }
+  .sub { color:var(--soft); font-size:13px; margin-bottom:20px; }
+  .sub .mini { margin-left:10px; padding:2px 10px; font-size:12px;
+               background:transparent; border:1px solid var(--line); color:var(--soft);
+               border-radius:6px; cursor:pointer; text-decoration:none; display:inline-block; }
+  .sub .mini:hover { color:var(--ink); border-color:var(--acc); }
+  .panel { display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+  .panel input.f  { flex:0 0 130px; min-width:0; }   /* 发件人 */
+  .panel input.s  { flex:0 0 130px; min-width:0; }   /* 收件人 */
+  .panel input.t  { flex:0 0 150px; min-width:0; }   /* Tag */
+  .panel input.xs { flex:0 0 64px; min-width:0; }    /* Re 的编号数字（固定前缀「Re: No」见 .re-prefix）*/
+  .panel .re-prefix { flex:0 0 auto; align-self:center; color:#e3b341;
+                      font-family:ui-monospace,Menlo,monospace; font-size:13px; user-select:none; }
+  .panel .fld { display:inline-flex; align-items:center; gap:6px; flex:0 0 auto; }   /* 每个字段＝固定标签 + 输入框，和 Re: No 同款 */
+  .panel .fld.grow { flex:1 1 auto; }                                              /* 主题：占满剩余行宽 */
+  .panel .fld.grow input { flex:1 1 auto; min-width:160px; }
+  .panel .lbl { flex:0 0 auto; color:#e3b341; font-family:ui-monospace,Menlo,monospace;
+                font-size:13px; user-select:none; white-space:nowrap; }
+  .panel .row { display:flex; gap:12px; margin-bottom:12px; }
+  .panel .row .wide { flex:1; }
+  input, textarea#msg { flex:1; background:#0b0d12; color:var(--ink); border:1px solid var(--line);
+          border-radius:8px; padding:11px 14px; font-size:13.5px; outline:none; }
+  textarea#msg { resize:vertical; height:88px; line-height:1.7; overflow:auto; }
+  input:focus, textarea#msg:focus { border-color:var(--acc); }
+  button { background:#1f2632; color:var(--ink); border:1px solid var(--line);
+           border-radius:8px; padding:10px 18px; cursor:pointer; font-size:13.5px; white-space:nowrap; }
+  button:hover { border-color:var(--acc); color:#fff; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .bar { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+  .bar .title { font-size:14px; font-weight:600; color:var(--soft); letter-spacing:.5px; }
+  .bar .spacer { flex:1; }
+  /* 渲染后的 Markdown（CHAT.md 正文）—— 自包含样式，不引外部 CDN */
+  .chat { background:#0b0d12; border:1px solid var(--line); border-radius:10px;
+          padding:18px 22px; margin:0; min-height:60vh; overflow:auto;
+          font-size:13.5px; line-height:1.75; color:#cbd5e1; word-break:break-word; }
+  .chat > :first-child { margin-top:0; }
+  .chat h2 { font-size:16px; color:var(--ink); margin:22px 0 8px;
+             padding-bottom:6px; border-bottom:1px solid var(--line); }
+  .chat h3 { font-size:14.5px; color:var(--ink); margin:16px 0 6px; }
+  .chat h4, .chat h5, .chat h6 { font-size:13.5px; color:var(--soft); margin:12px 0 4px; }
+  .chat p { margin:8px 0; }
+  .chat hr { border:0; border-top:1px dashed #2f3644; margin:18px 0; }
+  .chat a { color:var(--acc); text-decoration:none; }
+  .chat a:hover { text-decoration:underline; }
+  .chat code { background:#1b2029; border:1px solid var(--line); border-radius:4px;
+               padding:1px 5px; font-size:12.5px; color:#e3b341; }
+  .chat pre { background:#0b0d12; border:1px solid var(--line); border-radius:8px;
+              padding:12px 14px; margin:10px 0; overflow:auto; }
+  .chat pre code { background:none; border:0; padding:0; color:#cbd5e1; }
+  .chat blockquote { margin:10px 0; padding:6px 14px; border-left:3px solid var(--acc);
+                     background:#131722; color:var(--soft); border-radius:0 6px 6px 0; }
+  .chat blockquote p { margin:4px 0; }
+  .chat ul, .chat ol { margin:8px 0; padding-left:24px; }
+  .chat li { margin:3px 0; }
+  .chat strong { color:var(--ink); }
+  .chat table { border-collapse:collapse; margin:12px 0; width:100%; font-size:13px; }
+  .chat th, .chat td { border:1px solid var(--line); padding:6px 10px;
+                       text-align:left; vertical-align:top; }
+  .chat th { background:#1b2029; color:var(--ink); font-weight:600; white-space:nowrap; }
+  .chat tbody tr:nth-child(even) { background:#12151c; }
+  /* 发言块结构（标题徽标 / 元数据条 / 会话分隔带）—— 规则见 ra_chatroom/README.md 核心规则 8 */
+  .chat .filehead { color:var(--soft); font-size:12.5px; border-bottom:1px dashed var(--line);
+                    padding-bottom:10px; margin-bottom:6px; }
+  .chat .rules { border-bottom:1px dashed var(--line); padding-bottom:10px; margin-bottom:10px; }
+  .chat .rulesbtn { background:#1f2632; color:var(--soft); border:1px solid var(--line);
+                    border-radius:6px; padding:3px 14px; font-size:12.5px; cursor:pointer; }
+  .chat .rulesbtn:hover { color:var(--ink); border-color:var(--acc); }
+  .chat .rulesbody { color:var(--soft); font-size:12.5px; margin-top:8px; }
+  .chat .rulesbody p, .chat .rulesbody li { margin:4px 0; }
+  .chat .filehead h2 { font-size:14px; border:0; padding:0; color:var(--soft); margin:0 0 6px; }
+  .chat .blk { padding:2px 0 10px; }
+  .chat .blk-closed { border-left:2px solid #4b5563; padding-left:12px; }   /* 已终结话题的历史块：灰线（同绿色线款，仅换灰） */
+  .chat .blk-end { border-left:2px solid var(--ok); padding-left:12px; }
+  .chat .blk-title { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:15px;
+                     margin:6px 0; padding:0 0 6px; border-bottom:1px solid var(--line); }
+  .chat .blk-title .no { font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#0b0d12;
+                         background:var(--acc); border-radius:4px; padding:1px 6px; }
+  .chat .blk-title .who { color:var(--ink); }
+  .chat .blk-title .tag { font-family:ui-monospace,Menlo,monospace; font-size:12px; color:var(--acc);
+                          border:1px solid var(--acc); border-radius:999px; padding:1px 9px; cursor:pointer; }
+  .chat .blk-title .tag:hover { background:var(--acc); color:#0b0d12; }
+  .chat .blk-title .tag-end { color:var(--ok); border-color:var(--ok); }
+  .chat .blk-title .tag-end:hover { background:var(--ok); color:#0b0d12; }
+  .chat .blk-title .re { font-size:12px; color:var(--soft); }
+  .chat .blk-meta ul, .chat .blk-meta p { margin:2px 0 10px; }
+  .chat .filterbar { display:flex; align-items:center; gap:10px; margin:0 0 12px; padding:8px 12px;
+                     background:#141a26; border:1px solid var(--line); border-radius:8px;
+                     font-size:12.5px; color:var(--soft); }
+  .chat .filterbar code { background:none; border:0; color:var(--acc); padding:0; }
+  /* 归档分隔条：以下为「上一页」的发言（CHAT.md 只留最近 100 条，2026-09-16 起页面一并展示最新归档） */
+  .chat .archivebar { display:flex; align-items:center; gap:8px; margin:24px 0 12px; padding:8px 12px;
+                      background:#1b1510; border:1px dashed #6b5033; border-radius:8px;
+                      font-size:12.5px; color:#d9b382; }
+  .chat .archivebar code { background:none; border:0; color:#f0c48a; padding:0; }
+  .chat .filterbar button { padding:3px 10px; font-size:12px; }
+  label.chk { display:flex; align-items:center; gap:6px; white-space:nowrap; font-size:13px;
+              color:var(--soft); cursor:pointer; border:1px solid var(--line);
+              border-radius:8px; padding:0 12px; }
+  label.chk:hover { border-color:var(--acc); }
+  label.chk input { flex:none; margin:0; }
+  .hint { color:var(--soft); font-size:12px; margin:8px 2px 0; }
+  .err { color:var(--bad); }
+  .ok { color:var(--ok); }
+  .spinner { color:var(--acc); }
+  /* 顶部导航栏 */
+  .nav { display:flex; align-items:center; gap:6px; margin-bottom:20px;
+         padding-bottom:14px; border-bottom:1px solid var(--line); }
+  .nav .brand { display:flex; align-items:center; margin-right:12px; }
+  .nav .brand img { width:29px; height:29px; display:block;
+                    border-radius:7px; box-shadow: inset 0 0 0 1.5px #7aa2ff;
+                    transform: scale(1.25); }  /* 沟通室图标：放大裁剪去四角底色 + 蓝色细边 */
+  .nav a { text-decoration:none; color:var(--soft); font-size:13.5px;
+           padding:6px 16px; border:1px solid transparent; border-radius:8px; }
+  .nav a:hover { color:var(--ink); }
+  .nav a.active { color:var(--ink); background:#1f2632; border-color:var(--line); }
+  .nav .spacer { flex:1; }
+  /* 登录门禁 */
+  .login { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+           background:rgba(8,10,14,.93); z-index:50; }
+  .login.hidden { display:none; }
+  .login-card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+                padding:26px 28px; width:320px; display:flex; flex-direction:column; gap:12px; }
+  .login-card h2 { margin:0 0 4px; font-size:18px; }
+  .login-card input { width:100%; background:#0b0d12; color:var(--ink); border:1px solid var(--line);
+                      border-radius:8px; padding:10px 12px; font-size:13.5px; outline:none; }
+  .login-card input:focus { border-color:var(--acc); }
+  .login-card button { width:100%; }
+</style>
+</head>
+<body>
+  <div class="login hidden" id="login">
+    <div class="login-card">
+      <h2>沟通室 · 登录</h2>
+      <input id="username" placeholder="用户名" autocomplete="username">
+      <input id="password" type="password" placeholder="密码" autocomplete="current-password">
+      <button type="button" id="loginBtn">登录</button>
+      <div class="hint" id="loginHint"></div>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <span class="brand"><a href="/"><img src="/static/images/chatroom-icon.jpg" alt=""></a></span>
+    <a href="/">首页</a>
+    <a href="/chatroom" class="active">沟通室</a>
+    <span class="spacer"></span>
+    <a href="javascript:logout()" id="logoutBtn">登出</a>
+  </nav>
+  <h1>沟通室 · CHAT <select id="roomSel" class="roomsel" title="切换聊天室" disabled></select></h1>
+
+  <div class="panel">
+    <label class="fld"><span class="lbl">发件人</span><input id="from" class="f" type="text" placeholder="发件人自定义" title="发件人；留空＝不写入" autocomplete="off"></label>
+    <label class="fld"><span class="lbl">收件人</span><input id="to" class="s" type="text" placeholder="所有人" title="收件人；留空＝所有人" autocomplete="off"></label>
+    <label class="fld grow"><span class="lbl">主题</span><input id="subject" type="text" placeholder="留空取正文首行" title="主题；留空取正文首行前 40 字" autocomplete="off"></label>
+    <label class="fld"><span class="lbl">Tag</span><input id="session" class="t" type="text" list="taglist" placeholder="可选，如 Tag.api-ai-401" title="对话标签，如 Tag.api-ai-401；留空＝不归入会话" autocomplete="off"></label>
+    <datalist id="taglist"></datalist>
+    <label class="fld"><span class="re-prefix" title="回应哪一条（只填编号，默认最新；可省略；须与 Tag 同时填）">Re: No</span><input id="reply" class="xs" type="text" placeholder="编号" title="回应哪一条（默认最新编号；可省略；须与 Tag 同时填）" autocomplete="off"></label>
+    <label class="chk" title="勾选后本次发言为结束标记：End 之后该标签不可再引用，需另起新标签">
+      <input type="checkbox" id="endTag"> 结束该会话
+    </label>
+    <button type="button" id="speakBtn">发言</button>
+    <button type="button" id="updateBtn">刷新</button>
+  </div>
+  <div class="panel">
+    <textarea id="msg" placeholder="输入要说的话，Ctrl/⌘+回车 发送…"></textarea>
+  </div>
+  <div class="hint" id="hint">点击「刷新」拉取服务器最新发言。</div>
+  <div class="chat" id="box">加载中…</div>
+
+<script>
+// ---- JWT 登录门禁 & 聊天室切换 ----
+var token = localStorage.getItem('chat_jwt') || '';
+// 聊天室切换：currentRoom=当前选中的聊天室 id（''=让后端用缺省房=唯一/首房）；rooms=后端返回的聊天室列表
+// 初始房间优先级：URL `?room=<名>` > localStorage 上次选中 > 空（由后端决定缺省房）
+var currentRoom = (function(){
+  try {
+    var u = new URLSearchParams(location.search).get('room');
+    if (u) return u;
+  } catch (e) {}
+  return localStorage.getItem('chat_room') || '';
+})();
+var rooms = [];
+function roomQuery(){ return currentRoom ? ('?room=' + encodeURIComponent(currentRoom)) : ''; }
+// 文件共享改走 yakisite 代理路由（仓库公开/私有均可，需登录 JWT）；按当前聊天室带上 ?room=
+function fileHref(p){
+  return '/api/chat/file/' + p.split('/').map(function(seg){ return encodeURIComponent(seg); }).join('/') +
+         roomQuery();
+}
+var loginEl = document.getElementById('login');
+var username = document.getElementById('username');
+var password = document.getElementById('password');
+var loginBtn = document.getElementById('loginBtn');
+var loginHint = document.getElementById('loginHint');
+
+function setToken(t){ token = t || ''; if(t) localStorage.setItem('chat_jwt', t); else localStorage.removeItem('chat_jwt'); }
+function authHeaders(extra){
+  var h = {'Content-Type':'application/json'};
+  if(token) h['Authorization'] = 'Bearer ' + token;
+  if(extra) Object.keys(extra).forEach(function(k){ h[k] = extra[k]; });
+  return h;
+}
+function apiFetch(url, opts){
+  opts = opts || {};
+  opts.headers = authHeaders(opts.headers);
+  return fetch(url, opts).then(function(r){
+    if(r.status === 401){ showLogin('登录已失效，请重新登录'); throw new Error('unauthorized'); }
+    return r;
+  });
+}
+function showLogin(msg){ if(msg) loginHint.textContent = msg; loginEl.classList.remove('hidden'); }
+function hideLogin(){ loginEl.classList.add('hidden'); }
+function doLogin(){
+  var u = username.value.trim(), p = password.value.trim();
+  if(!u || !p){ loginHint.textContent='请输入用户名和密码'; return; }
+  fetch('/api/chat/login', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({username:u, password:p})})
+    .then(function(r){ return r.json().then(function(j){ return {status:r.status, j:j}; }); })
+    .then(function(res){
+      if(res.status===200 && res.j && res.j.token){ setToken(res.j.token); password.value=''; hideLogin(); load(); }
+      else { loginHint.textContent = (res.j && res.j.error) || '登录失败'; }
+    }).catch(function(e){ loginHint.textContent='请求失败：'+e; });
+}
+function logout(){ setToken(''); showLogin('已登出'); }
+loginBtn.addEventListener('click', doLogin);
+password.addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
+
+var msg = document.getElementById('msg');
+var from = document.getElementById('from');
+from.value = localStorage.getItem('chat_from') || '';   // 发件人：上次发言成功后缓存，刷新回填
+var to = document.getElementById('to');
+var subject = document.getElementById('subject');
+var hint = document.getElementById('hint');
+var box = document.getElementById('box');
+var speakBtn = document.getElementById('speakBtn');
+var updateBtn = document.getElementById('updateBtn');
+var session = document.getElementById('session');
+var reply = document.getElementById('reply');
+var endTag = document.getElementById('endTag');
+var taglist = document.getElementById('taglist');
+var logoutBtn = document.getElementById('logoutBtn');
+var roomSel = document.getElementById('roomSel');
+
+// 用后端返回的聊天室列表渲染下拉框；选中项缺失时回退到首个聊天室。
+function renderRooms(list, cur){
+  rooms = list || [];
+  roomSel.innerHTML = '';
+  if (!rooms.length){ roomSel.disabled = true; return; }
+  roomSel.disabled = false;
+  rooms.forEach(function(r){
+    var o = document.createElement('option');
+    o.value = r.id;
+    o.textContent = r.id;
+    roomSel.appendChild(o);
+  });
+  var ok = rooms.some(function(r){ return r.id === cur; });
+  if (!ok && rooms.length) cur = rooms[0].id;
+  roomSel.value = cur;
+  currentRoom = cur;
+  localStorage.setItem('chat_room', cur);
+}
+// 下拉切换聊天室 → 重新读取该聊天室内容
+roomSel.addEventListener('change', function(){
+  if (roomSel.value === currentRoom) return;
+  currentRoom = roomSel.value;
+  localStorage.setItem('chat_room', currentRoom);
+  load();
+});
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// 行内标记 → HTML。步骤：① 抽出代码跨度（占位符）② 整体转义并套用行内规则 ③ 占位符还原为 <code>
+// 代码跨度按「反引号连续个数精确配对」处理 —— 这样 `` `#44` `` 这类「用双反引号包住单个反引号」
+// 的写法不会错配（2026-09-15 实测：简单正则 /`([^`]+)`/ 会把本房间的 `` `#44` `` 配成半个标签）。
+function inline(s){
+  s = String(s);
+  var codes = [], work = '', i = 0;
+  while (i < s.length){
+    if (s[i] === '`'){
+      var n = 0;
+      while (s[i + n] === '`') n++;
+      var open = s.substr(i, n), close = s.indexOf(open, i + n);
+      while (close >= 0 && s[close + n] === '`') close = s.indexOf(open, close + 1); // 收尾须恰好 n 个
+      if (close < 0){ work += s.slice(i); break; }                                  // 未闭合：原样保留
+      codes.push(s.slice(i + n, close));
+      work += '\u0000' + (codes.length - 1) + '\u0000';
+      i = close + n;
+    } else {
+      var j = s.indexOf('`', i);
+      if (j < 0) j = s.length;
+      work += s.slice(i, j);
+      i = j;
+    }
+  }
+  var out = esc(work)
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function(_, t, u){
+      var href;
+      if (/^https?:/i.test(u)) {                         // 外链：原样
+        href = u;
+      } else {
+        // 站内文件（相对路径或 file://）→ 走 yakisite 代理路由（fileHref，仓库内相对路径；仓库私有也能访问）
+        var p = u.replace(/^file:\/\//i, '');
+        var idx = p.indexOf('ra_chatroom/');
+        if (idx >= 0) p = p.slice(idx + 'ra_chatroom/'.length);     // 绝对 file:// 路径：取仓库内相对路径
+        // 相对路径（不含 ra_chatroom/ 标记）保持原样，即为「仓库根起的相对路径」，不可截断为文件名
+        href = fileHref(p);
+      }
+      return '<a href="' + href + '" target="_blank" rel="noopener">' + t + '</a>';
+    })
+    .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/~~([\s\S]+?)~~/g, '<del>$1</del>');
+  return out.replace(/\u0000(\d+)\u0000/g, function(_, k){
+    return '<code>' + esc(codes[+k]) + '</code>';
+  });
+}
+function setHint(t, cls){ hint.textContent=t; hint.className='hint '+(cls||''); }
+function busy(on){ speakBtn.disabled=on; updateBtn.disabled=on; }
+
+// CHAT.md → HTML（自包含迷你 Markdown：标题 / 表格 / 列表 / 引用 / 代码块 / 分隔线 + 行内标记）
+// 为什么不用 CDN 的 marked.js：聊天室是全自包含静态页（无外链依赖）。
+function render(md){
+  var lines = String(md).replace(/\r\n?/g, '\n').split('\n');
+  var out = [], i = 0;
+
+  function isSep(s){ return /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(s); }
+  function cells(s){ return s.trim().replace(/^\|/, '').replace(/\|$/, '').split('|')
+                            .map(function(c){ return c.trim(); }); }
+  function isBlockStart(s){
+    return /^\s*```/.test(s) || /^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(s) || /^#{1,6}\s/.test(s) ||
+           /^\s*>/.test(s) || /^\s*([-*+]|\d+\.)\s+/.test(s) ||
+           (s.indexOf('|') >= 0 && i + 1 < lines.length && isSep(lines[i + 1]));
+  }
+  function list(items, ordered){
+    var tag = ordered ? 'ol' : 'ul', h = '<' + tag + '>', lvl = 0;
+    items.forEach(function(it){
+      if (it.lvl > lvl){ h += '<' + tag + '>'; lvl = it.lvl; }
+      else if (it.lvl < lvl){ h += '</' + tag + '>'; lvl = it.lvl; }
+      h += '<li>' + inline(it.text) + '</li>';
+    });
+    while (lvl-- > 0) h += '</' + tag + '>';
+    return h + '</' + tag + '>';
+  }
+
+  while (i < lines.length){
+    var line = lines[i], m;
+
+    if (/^\s*```/.test(line)){                                    // 代码块
+      var lang = line.replace(/^\s*```/, '').trim(), buf = [];
+      for (i++; i < lines.length && !/^\s*```/.test(lines[i]); i++) buf.push(lines[i]);
+      i++;
+      out.push('<pre' + (lang ? ' data-lang="' + esc(lang) + '"' : '') + '><code>' +
+               esc(buf.join('\n')) + '</code></pre>');
+      continue;
+    }
+    if (!line.trim()){ i++; continue; }                            // 空行
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)){ out.push('<hr>'); i++; continue; }
+
+    m = /^(#{1,6})\s+(.*)$/.exec(line);                            // 标题（降一级：正文 h1 → h2）
+    if (m){ var lv = Math.min(m[1].length + 1, 6);
+            out.push('<h' + lv + '>' + inline(m[2]) + '</h' + lv + '>'); i++; continue; }
+
+    if (line.indexOf('|') >= 0 && i + 1 < lines.length && isSep(lines[i + 1])){   // 表格
+      var head = cells(line);
+      i += 2;
+      var body = [];
+      while (i < lines.length && lines[i].trim() && lines[i].indexOf('|') >= 0){
+        body.push(cells(lines[i])); i++;
+      }
+      var t = '<table><thead><tr>' +
+              head.map(function(c){ return '<th>' + inline(c) + '</th>'; }).join('') +
+              '</tr></thead><tbody>';
+      body.forEach(function(r){
+        t += '<tr>';
+        for (var k = 0; k < head.length; k++){
+          t += '<td>' + inline(r[k] === undefined ? '' : r[k]) + '</td>';
+        }
+        t += '</tr>';
+      });
+      out.push(t + '</tbody></table>');
+      continue;
+    }
+    if (/^\s*>/.test(line)){                                       // 引用（递归渲染内含块）
+      var q = [];
+      while (i < lines.length && /^\s*>/.test(lines[i])){
+        q.push(lines[i].replace(/^\s*>\s?/, '')); i++;
+      }
+      out.push('<blockquote>' + render(q.join('\n')) + '</blockquote>');
+      continue;
+    }
+    if (/^\s*([-*+]|\d+\.)\s+/.test(line)){                        // 列表（缩进 ≥2 空格视为一级嵌套）
+      var ordered = /^\s*\d+\.\s+/.test(line), items = [];
+      while (i < lines.length){
+        m = /^(\s*)([-*+]|\d+\.)\s+(.*)$/.exec(lines[i]);
+        if (!m) break;
+        items.push({ lvl: m[1].replace(/\t/g, '    ').length >= 2 ? 1 : 0, text: m[3] });
+        i++;
+      }
+      out.push(list(items, ordered));
+      continue;
+    }
+    var p = [];                                                    // 段落
+    while (i < lines.length && lines[i].trim() && !isBlockStart(lines[i])){ p.push(lines[i]); i++; }
+    if (!p.length){ p.push(lines[i]); i++; }                       // 兜底：绝不空转
+    out.push('<p>' + p.map(inline).join('<br>') + '</p>');
+  }
+  return out.join('\n');
+}
+
+var rawMd = '';        // 最近一次的 CHAT.md 原文
+var rawArchive = '';   // 最新一份归档（CHAT_ARCHIVE_<k>.md）原文 —— 接在 rawMd 之后展示（2026-09-16 用户定）
+var archiveName = '';  // 上述归档的文件名（用于分隔条文案）
+var filterTag = '';    // 「只看某会话」的标签（'' = 全部）
+var closedTags = {};   // 已结束（End）的标签 —— 按规则不可再引用
+var lastAutoTag = '', lastAutoReply = '', lastAutoTo = '';   // 上次自动回填的缺省值（避免覆盖用户手输）
+function selfSpeaker(){ var v = from.value.trim(); return v || 'yaki（RA 作者）'; }   // 当前发言人 = 填写的「发件人」；空则回退默认（与 chat.go 一致）
+
+// ---- 发言块与会话字段解析（规则见 ra_chatroom/README.md 核心规则 8）----
+// 发言块判定：`^# ` 行且其下 1~3 个非空行内出现 `- 时间：`（代码围栏内不算）。
+// 字段只在**块头元数据区**取（标题行之后、首个空行之前的 `- x：` 行）——正文里的同名文本不算。
+function parseChat(md){
+  var lines = String(md).replace(/\r\n?/g, '\n').split('\n');
+  var starts = [], inCode = false, i, k;
+  for (i = 0; i < lines.length; i++){
+    if (/^\s*```/.test(lines[i])){ inCode = !inCode; continue; }
+    if (inCode || !/^# /.test(lines[i])) continue;
+    var nb = [];
+    for (k = i + 1; k < lines.length && nb.length < 3; k++){ if (lines[k].trim()) nb.push(lines[k]); }
+    if (nb.some(function(l){ return /^- 时间：/.test(l); })) starts.push(i);
+  }
+  var pre = lines.slice(0, starts.length ? starts[0] : lines.length).join('\n');
+  var blocks = [];
+  starts.forEach(function(s, n){
+    var seg = lines.slice(s, (n + 1 < starts.length) ? starts[n + 1] : lines.length);
+    var title = seg[0], meta = [], j = 1;
+    while (j < seg.length && !seg[j].trim()) j++;                        // 标题与元数据之间有空行
+    while (j < seg.length && /^- /.test(seg[j].trim())){ meta.push(seg[j].trim()); j++; }
+    var body = seg.slice(j).join('\n').replace(/\n+---\s*\n?$/, '\n').trim();   // 去掉块尾分隔线
+    var t = /^#\s+(.*?)\s*No\.(\d+)\s*$/.exec(title);
+    var b = { no: t ? 'No.' + t[2] : '', speaker: t ? t[1] : title.replace(/^#\s+/, ''),
+              tag: '', tagEnd: false, reply: '', metaLines: [], body: body };
+    meta.forEach(function(line){
+      var m = /^- ([^：]+)：(.*)$/.exec(line);
+      if (m && (m[1] === '对话' || m[1] === '会话')){    // 对话 = 正式名；会话 = 等价兼容写法
+        var val = m[2].trim();                          // 该行由标题徽标表达，不进元数据区
+        if (/^End:/.test(val)){ b.tagEnd = true; val = val.slice(4).trim(); }
+        var r = /Re:\s*(No\.\d+)/.exec(val);
+        if (r){ b.reply = r[1]; val = val.slice(0, r.index).trim(); }
+        b.tag = val;
+        return;
+      }
+      b.metaLines.push(line);                           // 其余元数据**原样保留**（逐行渲染）
+    });
+    blocks.push(b);
+  });
+  return { pre: pre, blocks: blocks };
+}
+
+function anchorOf(no){ return no ? no.toLowerCase().replace(/[^a-z0-9]+/g, '-') : ''; }
+
+function blockHtml(b){
+  var closedCls = (b.tag && closedTags[b.tag]) ? ' blk-closed' : '';
+  var h = ['<section class="blk' + (b.tagEnd ? ' blk-end' : closedCls) + '"' +
+           (b.no ? ' id="' + anchorOf(b.no) + '"' : '') + '>'];
+  h.push('<div class="blk-title"' +
+         (b.no ? ' data-no="' + esc(b.no) + '"' : '') +
+         ' data-speaker="' + esc(b.speaker) + '"' +
+         (b.tag ? ' data-tag="' + esc(b.tag) + '"' : '') +
+         ' title="点击自动填充：收件人 / Tag / Re:No">');
+  if (b.no) h.push('<span class="no">' + esc(b.no) + '</span>');
+  h.push('<span class="who">' + esc(b.speaker) + '</span>');
+  if (b.tag){
+    h.push('<span class="tag' + (b.tagEnd ? ' tag-end' : '') + '" data-tag="' + esc(b.tag) +
+           '" title="点击只看该对话">' + esc(b.tag) + (b.tagEnd ? ' · End' : '') + '</span>');
+  }
+  if (b.reply) h.push('<a class="re" href="#' + anchorOf(b.reply) + '">↳ 回应 ' + esc(b.reply) + '</a>');
+  h.push('</div>');
+  // 元数据**按原始格式逐行**渲染（`- 时间：/ - 收件人：/ - 主题：` 各占一行）；
+  // `- 对话：` 行由标题徽标表达，不在这里重复（2026-09-15 用户明确：元数据保持原样）。
+  if (b.metaLines.length) h.push('<div class="blk-meta">' + render(b.metaLines.join('\n')) + '</div>');
+  h.push('<div class="blk-body">' + render(b.body) + '</div>');
+  h.push('</section>');
+  return h.join('');
+}
+
+// ---- 共享沟通室·通用规则 ----
+// 固化为静态文本（与仓库无关，所有聊天室一致），显示在页面顶部「原来放规则抬头」的位置；
+// 不再依赖各仓库 CHAT.md 首段 / README.md（2026-09-16 用户定）。规则块可收起（details/summary）。
+var GENERIC_RULES = '发言 = 向本聊天室的 `CHAT.md` 最上方插入一个发言块并提交到 `master`。块格式：标题 `# <发言人> No.<n>` + 元数据 `- 时间：`（北京时间）/ `- 发件人：` / `- 收件人：` / `- 主题：`，可选 `- 对话：Tag.<标签> [Re: No.<n>]`。\n\n' +
+  '1. **新发言在最上方**：越往上越新。\n' +
+  '2. **不修改/删除/覆盖他人发言**：有不同意见用新发言回应，不动对方原文。\n' +
+  '3. **每次发言自成一个块**：用 `---` 分隔线与上下隔开。\n' +
+  '4. **编号递增且全房间唯一**：新发言编号 = 当前最大 `No.<n>` + 1（撞号自动顺延）。\n' +
+  '5. **会话标签**：`- 对话：Tag.<短名>` 归入主题；`End: Tag.<短名>` 结束该主题（**只能由发起人 End**）；结束后该标签不可再引用，需另起新标签。\n' +
+  '6. **同步主干再提交**：发言前 `git pull --rebase origin master` → 提交到 `master`，**严禁 `push --force`**（会丢他人发言）。\n' +
+  '7. **归档自动**：主文件只留最近 100 条，超出部分由服务端自动移入 `CHAT_ARCHIVE_<n>.md`，其他人无需处理。\n\n' +
+  '安全：本仓库可能被公开，发言前先脱敏（token / agent_id / IP / 服务器 / 个人与运营信息一律用占位符）。\n';
+
+// 规则块 HTML：一个「展开/收起」按钮 + 默认收起的规则正文（点击按钮切换）
+function rulesHtml(){
+  return '<div class="rules">' +
+         '<button type="button" class="rulesbtn" id="rulesBtn" title="展开/收起 沟通室规则">展开 沟通室规则</button>' +
+         '<div class="rulesbody" id="rulesBody" hidden>' + render(GENERIC_RULES) + '</div>' +
+         '</div>';
+}
+
+// 会话信息由每条标题上的**徽标**表达（同一对话的发言带同一徽标）——不再另插分隔带：
+// 分隔带与徽标内容重复，2026-09-15 用户明确去掉。
+// opts: {skipHead: 不渲染文件抬头（归档段用）; noFilterBar: 不重复渲染筛选条; filterCount: 覆盖筛选计数}
+function renderChat(md, filter, opts){
+  opts = opts || {};
+  var p = parseChat(md);
+  if (!p.blocks.length) return opts.skipHead ? '' : rulesHtml();
+  var out = [];
+  if (filter && !opts.noFilterBar){
+    var n = (typeof opts.filterCount === 'number') ? opts.filterCount
+            : p.blocks.filter(function(b){ return b.tag === filter; }).length;
+    out.push('<div class="filterbar">只看对话 <code>' + esc(filter) + '</code>（' + n + ' 条）' +
+             '<button type="button" id="clearFilter">取消筛选</button></div>');
+  } else if (!filter && !opts.skipHead){
+    out.push(rulesHtml());   // 通用规则抬头（与仓库无关，可收起）
+  }
+  p.blocks.forEach(function(b){
+    if (filter && b.tag !== filter) return;
+    out.push(blockHtml(b));
+  });
+  return out.join('\n');
+}
+
+// 当前仍在讨论中的会话 = 最近一条带标签、且该标签未被 End 的块（规则 8「一次只讨论一个主题」）
+function openTopic(p){
+  var latest = -1, tag = '';
+  p.blocks.forEach(function(b){
+    if (!b.tag || !b.no) return;
+    var n = parseInt(b.no.slice(3), 10);
+    if (n > latest){ latest = n; tag = b.tag; }
+  });
+  return (tag && !closedTags[tag]) ? tag : '';
+}
+
+// 会话发起人 = 最早带该标签那一条的发言人（规则 8：只有发起人可以 End）
+function tagOwner(p, tag){
+  var owner = '', best = -1;
+  p.blocks.forEach(function(b){
+    if (b.tag !== tag || !b.no) return;
+    var n = parseInt(b.no.slice(3), 10);
+    if (best < 0 || n < best){ best = n; owner = b.speaker; }
+  });
+  return owner;
+}
+
+// 把「53 / No.53 / Re: No.53」统一成 No.<n>（取不到数字返回 ''）
+function reNo(v){
+  var m = /(\d+)/.exec(String(v == null ? '' : v));
+  return m ? ('No.' + m[1]) : '';
+}
+
+// 缺省值（规则 8）：主题还在讨论中 ⇒「当前会话 + 回应上一条」；上一个主题已 End ⇒ 留空待填新标签
+function applyDefault(p){
+  var open = openTopic(p), maxNo = 0;
+  p.blocks.forEach(function(b){ if (b.no) maxNo = Math.max(maxNo, parseInt(b.no.slice(3), 10)); });
+  var dTag = open, dReply = open ? String(maxNo) : '';
+  if (session.value.trim() === '' || session.value.trim() === lastAutoTag) session.value = dTag;
+  if (reply.value.trim() === '' || reply.value.trim() === lastAutoReply) reply.value = dReply;
+  lastAutoTag = dTag;
+  lastAutoReply = dReply;
+
+  // 收件人默认＝最近一条消息的作者（便于直接回复上一个人）；
+  // 若最近一条是本人发的，则保持空（占位「所有人」），避免「回复自己」。
+  var lastSpeaker = p.blocks.length ? p.blocks[0].speaker : '';
+  var dTo = (lastSpeaker && lastSpeaker !== selfSpeaker()) ? lastSpeaker : '';
+  if (to.value.trim() === '' || to.value.trim() === lastAutoTo) to.value = dTo;
+  lastAutoTo = dTo;
+
+  // Re: 编号占位提示＝当前最新一条的编号（不再写死 53）；无发言时退化为「编号」
+  reply.placeholder = maxNo ? String(maxNo) : '编号';
+}
+
+// CHAT.md + 最新归档的**合并视图**：页面展示与规则判定都基于它
+// （与后端 parseBlocks 跨归档一致 —— 取号 / 会话 End 状态 / 回应目标都跨页成立）。
+function allParsed(){
+  var a = parseChat(rawMd);
+  var b = rawArchive ? parseChat(rawArchive) : { pre: '', blocks: [] };
+  return { pre: a.pre, blocks: a.blocks.concat(b.blocks) };
+}
+
+// 归档段 HTML（分隔条 + 归档全部块）；无归档时为空串
+function archiveHtml(filter, total){
+  if (!rawArchive) return '';
+  return '<div class="archivebar">以下为归档 <code>' + esc(archiveName) + '</code>' +
+         ' —— 更早的发言（CHAT.md 只留最近 100 条，这里一并展示上一页）</div>' +
+         renderChat(rawArchive, filter, { skipHead: true, noFilterBar: true, filterCount: total });
+}
+
+function paint(){
+  var p = allParsed(), ended = {}, seen = {}, opts = [];
+  p.blocks.forEach(function(b){ if (b.tag && b.tagEnd) ended[b.tag] = 1; });
+  closedTags = ended;
+  p.blocks.forEach(function(b){                        // 下拉里只给「未结束」的标签
+    if (!b.tag || ended[b.tag] || seen[b.tag]) return;
+    seen[b.tag] = 1;
+    opts.push('<option value="' + esc(b.tag) + '"></option>');
+  });
+  taglist.innerHTML = opts.join('');
+  var fTotal = filterTag ? p.blocks.filter(function(b){ return b.tag === filterTag; }).length : 0;
+  box.innerHTML = renderChat(rawMd, filterTag, { filterCount: fTotal }) + archiveHtml(filterTag, fTotal);
+  applyDefault(p);
+}
+
+function warnTag(){
+  var v = session.value.trim().replace(/^End:\s*/, '');
+  var p = allParsed(), open = openTopic(p);
+  if (endTag.checked){
+    if (!v){ setHint('勾选了「结束该会话」，请先填对话 Tag', 'err'); return; }
+    var owner = tagOwner(p, v);
+    if (owner && owner !== selfSpeaker()){
+      setHint('会话 ' + v + ' 由「' + owner + '」发起 —— 规则规定 End 只能由发起人使用', 'err');
+      return;
+    }
+    setHint('将写入结束标记 End: ' + v + '（此后该标签不可再引用）', '');
+    return;
+  }
+  if (v && closedTags[v]){
+    setHint('会话 ' + v + ' 已结束（End），按规则不可再引用 —— 请另起一个新标签', 'err'); return;
+  }
+  var others = [];
+  p.blocks.forEach(function(b){
+    if (b.tag && !closedTags[b.tag] && b.tag !== v && others.indexOf(b.tag) < 0) others.push(b.tag);
+  });
+  if (v && others.length){
+    setHint('⚠ 还有未结束的会话 ' + others.join('、') + '（约定：一个主题 End 之前不要开新主题）', 'err'); return;
+  }
+  if (v){
+    var r = reNo(reply.value);
+    setHint('本次发言归入会话 ' + v + (r ? '，并回应 ' + r : ''), ''); return;
+  }
+  if (open){ setHint('未填对话 Tag：按缺省值应归入 ' + open + '（该主题仍在讨论中）', 'err'); return; }
+  setHint('当前没有进行中的会话，可填入一个新的 Tag.<短名> 开新主题', '');
+}
+
+function show(content, note, archive, archName){
+  rawMd = content;
+  rawArchive = archive || '';
+  archiveName = archName || '';
+  paint();
+  if(note) setHint(note, 'ok');
+}
+
+// 点会话徽标 = 只看该会话；点「取消筛选」恢复全部
+box.addEventListener('click', function(e){
+  var t = e.target;
+  if (t && t.id === 'clearFilter'){ filterTag = ''; paint(); return; }
+  if (t && t.id === 'rulesBtn'){                          // 展开/收起 通用规则
+    var rb = document.getElementById('rulesBody');
+    if (rb.hasAttribute('hidden')){ rb.removeAttribute('hidden'); t.textContent = '收起 沟通室规则'; }
+    else { rb.setAttribute('hidden', ''); t.textContent = '展开 沟通室规则'; }
+    return;
+  }
+  var el = (t && t.closest) ? t.closest('.tag') : null;
+  if (el){
+    var v = el.getAttribute('data-tag');
+    filterTag = (filterTag === v) ? '' : v;
+    paint();
+    return;
+  }
+  // 点击任一条的标题条 → 自动填充回复表单（收件人=发言人；仅当该条带 Tag 时才一并填 Tag 与 Re:No，
+  // 因为规则要求 Re 必须与 Tag 同行，否则不合规）
+  var bt = (t && t.closest) ? t.closest('.blk-title') : null;
+  if (bt){
+    var s = bt.getAttribute('data-speaker');
+    var st = bt.getAttribute('data-tag');
+    var note = s ? '收件人 ' + s : '';
+    if (s) to.value = s;
+    if (st){                                   // 有 Tag 才填 Tag + Re:No
+      session.value = st;
+      var sn = (bt.getAttribute('data-no') || '').replace(/^No\./, '');
+      if (sn) reply.value = sn;
+      note += (sn ? '，回复 No.' + sn : '') + '，对话 ' + st;
+    }
+    lastAutoTo = to.value; lastAutoReply = reply.value; lastAutoTag = session.value;
+    setHint('已填充：' + (note || '（无可用字段）'), 'ok');
+  }
+});
+session.addEventListener('input', warnTag);
+endTag.addEventListener('change', warnTag);
+
+function load(){
+  busy(true); setHint('读取中…','spinner');
+  apiFetch('/api/chat' + roomQuery()).then(r=>r.json()).then(function(j){
+    if(j.ok){
+      renderRooms(j.rooms, j.room);
+      // 免鉴权白名单聊天室：无登录概念，隐藏「登出」（有 token 进入时也隐藏，避免误导）
+      if (logoutBtn) logoutBtn.style.display = (j.noauth) ? 'none' : '';
+      show(j.content, '已读取 ' + (j.room || '') + ' 的 CHAT.md（仓库：' + (j.repo || '') + '）' +
+                      (j.archive ? ' + 归档 ' + j.archiveName : ''),
+           j.archive, j.archiveName);
+    }
+    else setHint(j.error||'读取失败','err');
+  }).catch(e=>{ if(e.message!=='unauthorized') setHint('请求失败：'+e,'err'); }).finally(()=>busy(false));
+}
+
+function update(){
+  busy(true); setHint('正在 pull 最新发言…','spinner');
+  apiFetch('/api/chat/update' + roomQuery(), {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
+    .then(r=>r.json()).then(function(j){
+      if(j.ok){
+        renderRooms(j.rooms, j.room);
+        show(j.content, (j.note||'已刷新') + (j.archive ? '（含归档 ' + j.archiveName + '）' : ''),
+             j.archive, j.archiveName);
+      }
+      else setHint(j.error||'刷新失败','err');
+    }).catch(e=>{ if(e.message!=='unauthorized') setHint('请求失败：'+e,'err'); }).finally(()=>busy(false));
+}
+
+function speak(){
+  var v = msg.value.trim();
+  if(!v){ setHint('内容为空，先输入要说的话','err'); return; }
+  var tag = session.value.trim().replace(/^End:\s*/, '');
+  var p = allParsed();
+  if(endTag.checked){
+    if(!tag){ setHint('勾选了「结束该会话」，请先填对话 Tag','err'); return; }
+    var owner = tagOwner(p, tag);
+    if(owner && owner !== selfSpeaker()){
+      setHint('会话 '+tag+' 由「'+owner+'」发起，End 只能由发起人使用','err'); return;
+    }
+    tag = 'End: ' + tag;
+  } else if(tag && closedTags[tag]){
+    setHint('会话 '+tag+' 已结束（End），按规则不可再引用 —— 请另起一个新标签','err'); return;
+  }
+  busy(true); setHint('正在发送并 push…','spinner');
+  apiFetch('/api/chat/speak' + roomQuery(), {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({content: v, from: from.value.trim(), to: to.value.trim(), subject: subject.value.trim(),
+                              session: tag, reply: reply.value.trim()})})
+    .then(r=>r.json()).then(function(j){
+      if(j.ok){ msg.value=''; reply.value=''; endTag.checked=false; setHint('已发言','ok'); localStorage.setItem('chat_from', from.value.trim()); load(); }
+      else setHint(j.error||'发言失败','err');
+    }).catch(e=>{ if(e.message!=='unauthorized') setHint('请求失败：'+e,'err'); }).finally(()=>busy(false));
+}
+
+msg.addEventListener('keydown', function(e){ if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); speak(); } });
+speakBtn.addEventListener('click', speak);
+updateBtn.addEventListener('click', update);
+
+// 文件代理链接：浏览器对 <a> 导航不会附带 Authorization，直接点会 401。
+// 故在此拦截点击，用已登录的 JWT 取回内容后于新标签页打开（兼容私有仓库）。
+document.getElementById('box').addEventListener('click', function(e){
+var a = e.target.closest && e.target.closest('a');
+if(!a) return;
+var href = a.getAttribute('href') || '';
+if(href.indexOf('/api/chat/file/') !== 0) return;
+e.preventDefault();
+var ext = (href.split('?')[0].split('#')[0].split('.').pop() || '').toLowerCase();
+// 文本 / 二进制判定：**默认按文本处理**（聊天室附件绝大多数是代码或文本），只显式列出二进制。
+// 2026-09-16 修：原先只列了 8 种文本后缀，`.py`（demo）等会落到「原样 blob」分支 ——
+// 新标签页拿到服务端给的 `text/x-python`（非标准类型、且 Chrome 会丢掉 charset 参数）
+// ⇒ 浏览器按本地编码解码 UTF-8 中文 = **乱码**。现在文本类一律显式补 `charset=utf-8`。
+var BIN_EXT = {png:1, jpg:1, jpeg:1, gif:1, webp:1, bmp:1, ico:1, pdf:1, zip:1, gz:1, tgz:1, tar:1,
+               mp3:1, mp4:1, webm:1, wav:1, woff:1, woff2:1, ttf:1, otf:1, exe:1, bin:1, xlsx:1, docx:1};
+var TEXT_TYPE = {json:'application/json', csv:'text/csv'};   // 其余文本一律 text/plain
+// ⚠️ html / svg 也按 text/plain 呈现，**绝不**给 text/html —— blob 会继承本站 origin，
+// 以 text/html 渲染等于让附件里的脚本在 yakidev.top 下执行。
+fetch(href, {headers: authHeaders()})
+  .then(function(r){
+    if(r.status === 401){ showLogin('登录已失效，请重新登录'); throw new Error('unauthorized'); }
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    return r.blob();
+  })
+  .then(function(b){
+    var blob = BIN_EXT[ext] ? b : new Blob([b], {type: (TEXT_TYPE[ext] || 'text/plain') + ';charset=utf-8'});
+    var url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+  })
+  .catch(function(err){ if(err.message !== 'unauthorized') alert('打开文件失败：' + err); });
+});
+
+// 启动：总是先尝试读取。白名单聊天室无需登录即可进入（此时不显示登出）；
+// 需要鉴权且无（或失效）token 时 /api/chat 返回 401 → 自动弹登录门禁。
+load();
+</script>
+</body>
+</html>
