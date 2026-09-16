@@ -407,17 +407,20 @@ func (h *ChatHandler) resetToOrigin() bool {
 	return true
 }
 
-// writeBlock 把发言块插到 CHAT.md 最上方（标题说明之下、第一个分隔线之前）。
+// writeBlock 把发言块插到 CHAT.md 最上方。
+// 定位方式：以「当前标号最大的一块」为锚（新发言的 No 正是最大 +1），插到该块之前；
+// 找不到任何块头（空文件等）时退回追加到末尾。
+// 这样不依赖文件开头的空行/分隔线格式（曾因整理时去掉前导空行，`\n---\n` 首个匹配
+// 落到第一块之后，新块被插成第二位置 ⇒ 置顶失效）。
 func (h *ChatHandler) writeBlock(block string) (bool, string) {
 	cur, err := os.ReadFile(h.file)
 	if err != nil {
 		return false, "读取 CHAT.md 失败：" + err.Error()
 	}
 	content := string(cur)
-	marker := "\n---\n"
-	idx := strings.Index(content, marker)
+	idx := h.anchorTopInsertPos(content)
 	var newContent string
-	if idx != -1 {
+	if idx >= 0 {
 		newContent = content[:idx] + block + "\n" + strings.TrimLeft(content[idx:], "\n")
 	} else {
 		newContent = content + block
@@ -426,6 +429,28 @@ func (h *ChatHandler) writeBlock(block string) (bool, string) {
 		return false, "写入 CHAT.md 失败：" + err.Error()
 	}
 	return true, ""
+}
+
+// anchorTopInsertPos 返回「标号最大那一块」的开头分隔线 `\n---\n` 的位置（插到它之前即置顶），
+// 与历史 writeBlock 的拼接口径一致（idx 指向分隔线前的换行）。
+// 最大块在文件最顶且前导无换行时返回 0（插到文件开头）；找不到块头返回 -1。
+func (h *ChatHandler) anchorTopInsertPos(content string) int {
+	pos := -1
+	maxN := -1
+	for _, m := range chatBlockHeadRE.FindAllStringSubmatchIndex(content, -1) {
+		n, err := strconv.Atoi(content[m[2]:m[3]])
+		if err == nil && n > maxN {
+			maxN = n
+			pos = m[0] // 块头行行首偏移
+		}
+	}
+	if pos < 0 {
+		return -1
+	}
+	if idx := strings.LastIndex(content[:pos], "\n---\n"); idx >= 0 {
+		return idx
+	}
+	return 0
 }
 
 // renumberTop 把写在最上方的那一块改号（撞号时用，只改自己那一块，不动他人内容）。
