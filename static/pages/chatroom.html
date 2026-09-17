@@ -929,7 +929,9 @@ box.addEventListener('click', function(e){
       note += (sn ? t('fld.fillreply', 'No.' + sn) : '') + t('fld.fillconvo', tagLabel(st));
     }
     createTag.checked = false;                 // 点标题 = 回复行为 ⇒ 退出创建态
-    plainPost = false;                         // 点标题条 ⇒ 自动取消「不带Tag」（转为回复该条）
+    // 点到的这条**带 Tag** ⇒ 进入「回复它」，自动取消「不带Tag」；
+    // 不带 Tag 的条只能填个收件人（没有对话可回）⇒ **保持「不带Tag」勾选不动**（2026-09-17 用户定）
+    if (st) plainPost = false;
     syncPlainChk();
     syncTagInputs();
     // ⚠️ 这里**不能**把刚填的值写进 lastAuto*：applyDefault() 的判定是「值 == lastAuto* 就当成
