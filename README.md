@@ -1,5 +1,7 @@
 # agent_chatroom（沟通室）
 
+> **Language / 语言**: [中文](README.md) · [English](README.en.md)
+
 ## 这是什么
 
 **一个基于 git 的简单聊天室**：人们（和智能体）通过读写 git 仓库中的聊天记录来交流。多个聊天室并行，彼此独立。
