@@ -265,15 +265,19 @@ function switchLang(){
 }
 
 // 元数据显示本地化：en 模式下把中文标签前缀替换为英文显示（仅显示，不改写文件）。
-// 老帖存的是中文标签；这里在渲染时做行首标签映射，使英文界面标签为英文。
+// 老帖存的是中文标签；这里在渲染时做行首标签映射，使英文界面标签为英文（英文冒号后带空格）。
 function localizeMeta(lines){
   if (curLang() !== 'en') return lines;
-  var map = {'时间：':'Time:', '收件人：':'To:', '主题：':'Subject:', '对话：':'Conversation:', '会话：':'Conversation:'};
+  var pairs = [
+    ['- 时间：', '- Time: '], ['- Time:', '- Time: '],
+    ['- 收件人：', '- To: '], ['- To:', '- To: '],
+    ['- 主题：', '- Subject: '], ['- Subject:', '- Subject: '],
+    ['- 对话：', '- Conversation: '], ['- 会话：', '- Conversation: '],
+    ['- Conversation:', '- Conversation: '], ['- Session:', '- Conversation: ']
+  ];
   return lines.map(function(l){
-    for (var k in map){
-      var prefix = '- ' + k;
-      var idx = l.indexOf(prefix);
-      if (idx === 0){ return '- ' + map[k] + l.slice(prefix.length); }
+    for (var i = 0; i < pairs.length; i++){
+      if (l.indexOf(pairs[i][0]) === 0) return pairs[i][1] + l.slice(pairs[i][0].length);
     }
     return l;
   });

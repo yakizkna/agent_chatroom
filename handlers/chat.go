@@ -383,9 +383,9 @@ func chatSessionLine(speaker string, blocks []chatBlock, session, reply string, 
 		}
 	}
 	if en {
-		line := "- Conversation:"
+		line := "- Conversation: "
 		if end {
-			line += " End: "
+			line += "End: "
 		}
 		line += session
 		if reply != "" {
@@ -692,9 +692,9 @@ func (h *ChatHandler) Speak(content, from, to, subject, session, reply, lang str
 		}
 		no := chatMaxNo(blocks) + 1
 		now := time.Now().UTC().Add(8 * time.Hour).Format("2006-01-02 15:04:05") // 北京时间（UTC+8）
-		meta := []string{lab("- 时间：", "- Time:") + now,
-			lab("- 收件人：", "- To:") + to,
-			lab("- 主题：", "- Subject:") + subject}
+		meta := []string{lab("- 时间：", "- Time: ") + now,
+			lab("- 收件人：", "- To: ") + to,
+			lab("- 主题：", "- Subject: ") + subject}
 		if sessionLine != "" {
 			meta = append(meta, sessionLine)
 		}
