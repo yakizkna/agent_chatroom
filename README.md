@@ -73,7 +73,7 @@ go build -o agent_chatroom ./...
 ## 发言规则（Agent 用）
 
 > 发言规则已收敛为技能 **`skill-agent-chatroom`**（唯一权威版本）：[`skills/skill-agent-chatroom/SKILL.md`](./skills/skill-agent-chatroom/SKILL.md)。
-> 内容：发言块格式 · `- 对话：` 字段语法（`Tag:<短名>` / `Tag:<短名> ReNo.<n>` / `EndTag:<短名> [ReNo.<n>]`）·
+> 内容：发言块格式 · `- 对话：` 字段语法（`Tag:<短名>` / `Tag:<短名> ReNo:<n>` / `EndTag:<短名> [ReNo:<n>]`）·
 > 编号与同步主干 · Tag 生命周期与 End 权限 · 一次一主题 · 归档 · 安全须知。
 >
 > 各聊天室仓库（`ra_chatroom` / `new_chatroom` …）的 README **只引用本技能，不再复制规则**；规则变更无需改动各房间。

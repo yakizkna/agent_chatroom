@@ -37,8 +37,8 @@ var (
 	chatTagRE      = regexp.MustCompile(`^Tag\.[A-Za-z0-9_-]{1,24}$`) // 内部规范 key（Tag.<短名>）
 	chatTagShortRE = regexp.MustCompile(`^[A-Za-z0-9_-]{1,24}$`)      // 对话字段的短名
 	chatReplyRE    = regexp.MustCompile(`^No\.\d+$`)
-	// 「对话」字段里的回应编号：新语法 ReNo.<n>（与 No.<n> 同形）与旧写法 Re: No.<n> 都接受
-	chatReNoRE = regexp.MustCompile(`(?:ReNo\.|Re:\s*No\.)(\d+)`)
+	// 「对话」字段里的回应编号：新语法 ReNo:<n>（与 No.<n> 同形）与旧写法 Re: No.<n> 都接受
+	chatReNoRE = regexp.MustCompile(`(?:ReNo[:.]|Re:\s*No\.)(\d+)`)
 	chatNoRE   = regexp.MustCompile(`No\.(\d+)`)
 	// 发言块标题行 `# <发言人> No.<n>` —— 归档按它切块，不依赖 `---` 分隔线
 	chatBlockHeadRE = regexp.MustCompile(`(?m)^# .*No\.(\d+)[ \t]*$`)
@@ -56,9 +56,9 @@ type chatBlock struct {
 // 对话字段语法（2026-09-17 用户定，统一到「解析 / 存储 / 显示」全链路）：
 //
 //	创建新 Tag：NewTag:<短名>
-//	回复   Tag：Tag:<短名> ReNo.<n>      （ReNo 可省 ⇒ 该 Tag 的一般性发言，非回复某人）
+//	回复   Tag：Tag:<短名> ReNo:<n>      （ReNo 可省 ⇒ 该 Tag 的一般性发言，非回复某人）
 //	带 Tag 发言：Tag:<短名>
-//	结束   Tag：EndTag:<短名>            （可带 ReNo.<n>）
+//	结束   Tag：EndTag:<短名>            （可带 ReNo:<n>）
 //
 // 兼容旧写法：Tag.<短名> / Tag.<短名> Re: No.<n> / End: Tag.<短名>（历史条目一律不动）。
 // parseChatSessionVal 把两种写法都归一到**内部规范** Tag（`Tag.<短名>`）+ End + Reply。
@@ -372,11 +372,11 @@ func chatSessionLine(speaker string, blocks []chatBlock, session, reply string, 
 	}
 	if session == "" {
 		if reply != "" {
-			return "", "回应编号（ReNo.<n>）必须与对话 Tag 同行 —— 写 `- 对话：Tag:<短名> ReNo.<n>`（指明回应哪条时请一并给出 Tag）", ""
+			return "", "回应编号（ReNo:<n>）必须与对话 Tag 同行 —— 写 `- 对话：Tag:<短名> ReNo:<n>`（指明回应哪条时请一并给出 Tag）", ""
 		}
 		return "", "", ""
 	}
-	// 对话字段语法（2026-09-17 用户定）：NewTag:<短名> / Tag:<短名>[ ReNo.<n>] / EndTag:<短名>[ ReNo.<n>]。
+	// 对话字段语法（2026-09-17 用户定）：NewTag:<短名> / Tag:<短名>[ ReNo:<n>] / EndTag:<短名>[ ReNo:<n>]。
 	// 入参一律接受四种写法：新语法、旧写法（End: Tag.<短名>）、带 Tag. 前缀、纯短名 —— 先归一到短名。
 	end := false
 	for _, pfx := range []string{"EndTag:", "End:"} {
@@ -396,7 +396,7 @@ func chatSessionLine(speaker string, blocks []chatBlock, session, reply string, 
 		session = strings.TrimSpace(session[4:])
 	}
 	if !chatTagShortRE.MatchString(session) {
-		return "", "对话 Tag 格式：短名（字母/数字/-/_，≤24 字符）—— 新建 NewTag:<短名>，接续 Tag:<短名>[ ReNo.<n>]，结束 EndTag:<短名>；旧写法 Tag.<短名> / End: Tag.<短名> 亦兼容", ""
+		return "", "对话 Tag 格式：短名（字母/数字/-/_，≤24 字符）—— 新建 NewTag:<短名>，接续 Tag:<短名>[ ReNo:<n>]，结束 EndTag:<短名>；旧写法 Tag.<短名> / End: Tag.<短名> 亦兼容", ""
 	}
 	tag := "Tag." + session  // 内部规范 key（下文校验一律用它）
 	disp := "Tag:" + session // 提示文案里给人看的显示形式
@@ -404,10 +404,10 @@ func chatSessionLine(speaker string, blocks []chatBlock, session, reply string, 
 	// 2026-09-17 新规则：① 回复**必须**带 ReNo（不再允许「只带 Tag 的自由发言」）—— 仅对**已存在**的 Tag 生效，
 	// 新建 Tag 时无对象可回复，允许不带；② 「创建 Tag」勾选时该短名必须不存在（互斥语义）。
 	if create && known[tag] {
-		return "", fmt.Sprintf("会话 %s 已存在，不能「创建 Tag」—— 请直接回复它（Tag:<短名> ReNo.<n>），或换一个短名", disp), ""
+		return "", fmt.Sprintf("会话 %s 已存在，不能「创建 Tag」—— 请直接回复它（Tag:<短名> ReNo:<n>），或换一个短名", disp), ""
 	}
 	if !end && known[tag] && reply == "" {
-		return "", fmt.Sprintf("会话 %s 已存在 —— 回复它必须带回应编号（Tag:<短名> ReNo.<n>，指明回应哪一条）", disp), ""
+		return "", fmt.Sprintf("会话 %s 已存在 —— 回复它必须带回应编号（Tag:<短名> ReNo:<n>，指明回应哪一条）", disp), ""
 	}
 	if end {
 		if !known[tag] {
@@ -438,18 +438,18 @@ func chatSessionLine(speaker string, blocks []chatBlock, session, reply string, 
 			warn = fmt.Sprintf("当前还有未结束的会话 %s —— 约定是「一个主题 End 之前不要开新主题」，建议先 EndTag 它再开新主题（本次已照发）", strings.Join(others, "、"))
 		}
 	}
-	// 写入形态（统一语法）：首现 ⇒ NewTag:；End ⇒ EndTag:；其余 ⇒ Tag:；回应 ⇒ 追加 ReNo.<n>
+	// 写入形态（统一语法）：首现 ⇒ NewTag:；End ⇒ EndTag:；其余 ⇒ Tag:；回应 ⇒ 追加 ReNo:<n>
 	line := "- 对话："
 	if en {
 		line = "- Conversation: "
 	}
 	if end {
-		line += "EndTag:" + session // 结束：EndTag:<短名>（可带 ReNo.<n>）
+		line += "EndTag:" + session // 结束：EndTag:<短名>（可带 ReNo:<n>）
 	} else {
-		line += "Tag:" + session // 创建与回复同为 Tag:<短名>（回复必带 ReNo.<n>，见上方校验）
+		line += "Tag:" + session // 创建与回复同为 Tag:<短名>（回复必带 ReNo:<n>，见上方校验）
 	}
 	if reply != "" {
-		line += " ReNo." + strings.TrimPrefix(reply, "No.")
+		line += " ReNo:" + strings.TrimPrefix(reply, "No.")
 	}
 	return line, "", warn
 }

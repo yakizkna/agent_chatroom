@@ -24,7 +24,7 @@
   .panel input.f  { flex:0 0 130px; min-width:0; }   /* 发件人 */
   .panel input.s  { flex:0 0 130px; min-width:0; }   /* 收件人 */
   .panel input.t  { flex:0 0 150px; min-width:0; }   /* Tag */
-  .panel input.xs { flex:0 0 64px; min-width:0; }    /* Re 的编号数字（固定前缀「ReNo.」见 .re-prefix）*/
+  .panel input.xs { flex:0 0 64px; min-width:0; }    /* Re 的编号数字（固定前缀「ReNo」见 .re-prefix）*/
   .panel .re-prefix { flex:0 0 auto; align-self:center; color:#e3b341;
                       font-family:ui-monospace,Menlo,monospace; font-size:13px; user-select:none; }
   .panel .fld { display:inline-flex; align-items:center; gap:6px; flex:0 0 auto; }   /* 每个字段＝固定标签 + 输入框，和 Re: No 同款 */
@@ -152,7 +152,7 @@
     <label class="fld grow"><span class="lbl" data-i18n="fld.subject">主题</span><input id="subject" type="text" autocomplete="off"></label>
     <label class="fld"><span class="lbl">Tag</span><input id="session" class="t" type="text" list="taglist" autocomplete="off" readonly></label>
     <datalist id="taglist"></datalist>
-    <label class="fld"><span class="re-prefix" data-i18n="fld.reply">ReNo.</span><input id="reply" class="xs" type="text" autocomplete="off" readonly></label>
+    <label class="fld"><span class="re-prefix" data-i18n="fld.reply">ReNo</span><input id="reply" class="xs" type="text" autocomplete="off" readonly></label>
     <label class="chk">
       <input type="checkbox" id="createTag"> <span data-i18n="fld.create">创建Tag</span>
     </label>
@@ -176,7 +176,7 @@ var I18N = {
     'login.err.required': '请输入用户名和密码', 'login.err.fail': '登录失败', 'login.err.req': '请求失败：',
     'login.expired': '登录已失效，请重新登录', 'logout.done': '已登出',
     'logout': '登出', 'lang.switch': 'EN', 'room.sel': '切换聊天室',
-    'fld.from': '发件人', 'fld.to': '收件人', 'fld.subject': '主题', 'fld.create': '创建Tag', 'fld.end': '结束Tag', 'fld.reply': 'ReNo.',
+    'fld.from': '发件人', 'fld.to': '收件人', 'fld.subject': '主题', 'fld.create': '创建Tag', 'fld.end': '结束Tag', 'fld.reply': 'ReNo:',
     'speak': '发言', 'update': '刷新', 'loading': '加载中…',
     'ph.from': '发件人自定义', 'ph.to': '所有人', 'ph.subject': '留空取正文首行', 'ph.session': '默认只读：点上一条标题自动填；勾选「创建Tag」后可填新短名（如 cup-quota-0917）',
     'ph.reply': '编号', 'ph.msg': '输入要说的话，Ctrl/⌘+回车 发送…',
@@ -194,7 +194,7 @@ var I18N = {
     'warn.create.needtag': '勾选了「创建Tag」，必须填写 Tag 短名',
     'warn.create.exists': 'Tag %s 已存在，不能创建 —— 请取消勾选后直接回复它（点它的标题即可带出编号）',
     'warn.create.willwrite': '将创建新 Tag：%s',
-    'warn.reply.needno': '回复 Tag 必须带回应编号（ReNo.<n>）—— 点击某条发言的标题即可自动填上',
+    'warn.reply.needno': '回复 Tag 必须带回应编号（ReNo:<n>）—— 点击某条发言的标题即可自动填上',
     'warn.end.notowner': '会话 %s 由「%s」发起 —— 规则规定 End 只能由发起人使用',
     'warn.end.willwrite': '将写入结束标记 EndTag:%s%s（此后该 Tag 不可再引用）',
     'warn.closed': '会话 %s 已结束（End），按规则不可再引用 —— 请另起一个新标签',
@@ -211,7 +211,7 @@ var I18N = {
     'login.err.required': 'Enter username and password', 'login.err.fail': 'Login failed', 'login.err.req': 'Request failed: ',
     'login.expired': 'Session expired, please log in again', 'logout.done': 'Logged out',
     'logout': 'Logout', 'lang.switch': '中', 'room.sel': 'Switch room',
-    'fld.from': 'From', 'fld.to': 'To', 'fld.subject': 'Subject', 'fld.create': 'New Tag', 'fld.end': 'End Tag', 'fld.reply': 'ReNo.',
+    'fld.from': 'From', 'fld.to': 'To', 'fld.subject': 'Subject', 'fld.create': 'New Tag', 'fld.end': 'End Tag', 'fld.reply': 'ReNo:',
     'speak': 'Post', 'update': 'Refresh', 'loading': 'Loading…',
     'ph.from': 'Custom sender', 'ph.to': 'Everyone', 'ph.subject': 'Leave empty to use first line', 'ph.session': 'Read-only by default: click a post title to fill; check "New Tag" to type a new short name',
     'ph.reply': 'No.', 'ph.msg': 'Type your message, Ctrl/⌘+Enter to send…',
@@ -229,7 +229,7 @@ var I18N = {
     'warn.create.needtag': 'Checkbox "New Tag" is on: a tag short name is required',
     'warn.create.exists': 'Tag %s already exists — uncheck "New Tag" and reply to it instead (click its title to fill the number)',
     'warn.create.willwrite': 'Will create new Tag: %s',
-    'warn.reply.needno': 'Replying to a Tag requires a reply number (ReNo.<n>) — click a post title to fill it automatically',
+    'warn.reply.needno': 'Replying to a Tag requires a reply number (ReNo:<n>) — click a post title to fill it automatically',
     'warn.end.notowner': 'Conversation %s is started by "%s" — only the starter may End it',
     'warn.end.willwrite': 'Will write End marker: EndTag:%s%s (tag can no longer be reused afterward)',
     'warn.closed': 'Conversation %s is ended (End), cannot be reused — start a new tag',
@@ -577,14 +577,14 @@ function parseChat(md){
         if (m && (m[1] === '对话' || m[1] === '会话')){ conv = m[2]; }
       }
       if (conv != null){
-        // 对话字段语法（2026-09-17 统一）：NewTag:<短名> / Tag:<短名>[ ReNo.<n>] / EndTag:<短名>
+        // 对话字段语法（2026-09-17 统一）：NewTag:<短名> / Tag:<短名>[ ReNo:<n>] / EndTag:<短名>
         // 旧写法（Tag.<短名> / End: Tag.<短名> / Re: No.<n>）一律兼容；内部规范 key 仍是 Tag.<短名>。
         var val = conv.trim();
         if (/^EndTag:/.test(val)){ b.tagEnd = true; val = val.slice(7).trim(); }
         else if (/^End:/.test(val)){ b.tagEnd = true; val = val.slice(4).trim(); }
         if (/^NewTag:/.test(val)){ val = val.slice(7).trim(); }   // 过渡写法：等同 Tag:
         else if (/^Tag:/.test(val)){ val = val.slice(4).trim(); }
-        var r = /(?:ReNo\.|Re:\s*No\.)(\d+)/.exec(val);
+        var r = /(?:ReNo[:.]|Re:\s*No\.)(\d+)/.exec(val);   // 新 ReNo:<n> / 旧的 ReNo.<n> / 更旧的 Re: No.<n>
         if (r){ b.reply = 'No.' + r[1]; val = val.slice(0, r.index).trim(); }
         b.tag = val ? (/^Tag\./.test(val) ? val : ('Tag.' + val)) : '';
         return;
@@ -700,11 +700,11 @@ function tagBadge(b){
   return (b.tagEnd ? 'EndTag:' : 'Tag:') + s;
 }
 
-// 回应编号的**显示**文案：`No.144` → `ReNo.144`（2026-09-17 用户定，与 No.<n> 同形；
-// 与 Tag: 一起读作「对话：Tag:xxx ReNo.144」）。文件里同样是 `ReNo.<n>`。
+// 回应编号的**显示**文案：`No.144` → `ReNo:144`（2026-09-17 用户定，与 No.<n> 同形；
+// 与 Tag: 一起读作「对话：Tag:xxx ReNo:144」）。文件里同样是 `ReNo:<n>`。
 function reLabel(v){
   var m = /(\d+)/.exec(String(v == null ? '' : v));
-  return m ? ('ReNo.' + m[1]) : '';
+  return m ? ('ReNo:' + m[1]) : '';
 }
 
 // 缺省值（规则 8）：主题还在讨论中 ⇒「当前会话 + 回应上一条」；上一个主题已 End ⇒ 留空待填新标签
