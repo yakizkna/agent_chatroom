@@ -185,7 +185,7 @@ var I18N = {
     'hf.onlytag': '只看对话 %s（%s 条）', 'hf.clearing': '取消筛选',
     'hf.archive': '以下为归档 %s —— 更早的发言（CHAT.md 只留最近 100 条）',
     'tb.reply': '↳ 回应 ', 'tg.end': ' · End', 'tb.fill': '点击自动填充：收件人 / Tag / Re:No', 'tg.click': '点击只看该对话',
-    'err.empty': '内容为空，先输入要说的话', 'err.readfail': '读取失败', 'err.updfail': '刷新失败', 'err.speakfail': '发言失败',
+    'err.empty': '内容为空，先输入要说的话', 'err.speaker': '请填写发件人', 'err.readfail': '读取失败', 'err.updfail': '刷新失败', 'err.speakfail': '发言失败',
     'err.reqfail': '请求失败：', 'err.openfile': '打开文件失败：',
     'warn.end.needtag': '勾选了「结束该会话」，请先填对话 Tag',
     'warn.end.notowner': '会话 %s 由「%s」发起 —— 规则规定 End 只能由发起人使用',
@@ -197,8 +197,7 @@ var I18N = {
     'warn.noopen.default': '未填对话 Tag：按缺省值应归入 %s（该主题仍在讨论中）',
     'warn.noopen': '当前没有进行中的会话，可填入一个新的 Tag.<短名> 开新主题',
     'fld.fillnote': '收件人 %s', 'fld.fillreply': '，回复 %s', 'fld.fillconvo': '，对话 %s',
-    'fld.none': '（无可用字段）', 'sep.list': '、',
-    'fill.self': '（你）', 'spk.default': '未命名'
+    'fld.none': '（无可用字段）', 'sep.list': '、'
   },
   en: {
     'title.tab': 'Chat Room · RA', 'title.head': 'Chat Room · CHAT',
@@ -217,7 +216,7 @@ var I18N = {
     'hf.onlytag': 'Only conversation %s (%s posts)', 'hf.clearing': 'Clear filter',
     'hf.archive': 'Older posts from archive %s (CHAT.md keeps only latest 100)',
     'tb.reply': '↳ reply ', 'tg.end': ' · End', 'tb.fill': 'Click to autofill: To / Tag / Re:No', 'tg.click': 'Click to view this conversation only',
-    'err.empty': 'Message is empty', 'err.readfail': 'Read failed', 'err.updfail': 'Refresh failed', 'err.speakfail': 'Post failed',
+    'err.empty': 'Message is empty', 'err.speaker': 'Please enter the sender', 'err.readfail': 'Read failed', 'err.updfail': 'Refresh failed', 'err.speakfail': 'Post failed',
     'err.reqfail': 'Request failed: ', 'err.openfile': 'Failed to open file: ',
     'warn.end.needtag': 'You checked "End this conversation", please fill in the Tag first',
     'warn.end.notowner': 'Conversation %s is started by "%s" — only the starter may End it',
@@ -228,8 +227,7 @@ var I18N = {
     'warn.noopen.default': 'No Tag filled: defaults to open topic %s (still in discussion)',
     'warn.noopen': 'No active conversation; fill a new Tag.<short> to start one',
     'fld.fillnote': 'To: %s', 'fld.fillreply': ', reply %s', 'fld.fillconvo': ', conversation %s',
-    'fld.none': '(no fields)', 'sep.list': ', ',
-    'fill.self': '(you)', 'spk.default': 'unnamed'
+    'fld.none': '(no fields)', 'sep.list': ', '
   }
 };
 function curLang(){ return (localStorage.getItem('chat_lang') === 'en') ? 'en' : 'zh'; }
@@ -512,7 +510,7 @@ var archiveName = '';  // 上述归档的文件名（用于分隔条文案）
 var filterTag = '';    // 「只看某会话」的标签（'' = 全部）
 var closedTags = {};   // 已结束（End）的标签 —— 按规则不可再引用
 var lastAutoTag = '', lastAutoReply = '', lastAutoTo = '';   // 上次自动回填的缺省值（避免覆盖用户手输）
-function selfSpeaker(){ var v = from.value.trim(); return v || 'yaki（RA 作者）'; }   // 当前发言人 = 填写的「发件人」；空则回退默认（与 chat.go 一致）
+function selfSpeaker(){ return from.value.trim(); }   // 当前发言人 = 填写的「发件人」（必填，无缺省）
 
 // ---- 发言块与会话字段解析（规则见 ra_chatroom/README.md 核心规则 8）----
 // 发言块判定：`^# ` 行且其下 1~3 个非空行内出现 `- 时间：`（代码围栏内不算）。
@@ -786,6 +784,7 @@ function update(){
 function speak(){
   var v = msg.value.trim();
   if(!v){ setHint(t('err.empty'),'err'); return; }
+  if(!from.value.trim()){ setHint(t('err.speaker'),'err'); return; }
   var tag = session.value.trim().replace(/^End:\s*/, '');
   var p = allParsed();
   if(endTag.checked){

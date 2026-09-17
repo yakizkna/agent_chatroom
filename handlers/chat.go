@@ -22,7 +22,6 @@ import (
 // 并发撞号时把「自己那一块」的编号顺延为当前最大 +1 后重推。
 
 const (
-	chatSpeaker = "yaki（RA 作者）" // 缺省发言人：未填「发件人」时的回退（End 归属身份同取发言标题的发言人）
 	// 提交作者**固定写死**：不依赖所在机器的 git 配置。
 	// 47 上未设 user.name/user.email 时，git commit / rebase 会直接 fatal
 	// 「Author identity unknown … unable to auto-detect email address」，导致发言整体失败。
@@ -514,8 +513,8 @@ func (h *ChatHandler) archiveOverflow() ([]string, string) {
 		}
 		blocks = append(blocks, data[l[0]:end])
 	}
-	kept := blocks[:100]      // 主文件保留的最近 100 条（最新在首）
-	overflow := blocks[100:]   // 超出的旧块
+	kept := blocks[:100]     // 主文件保留的最近 100 条（最新在首）
+	overflow := blocks[100:] // 超出的旧块
 
 	byArch := map[int][]string{} // k -> 块正文（旧→新，与 CHAT.md 同序）
 	var stay []string
@@ -646,10 +645,10 @@ func (h *ChatHandler) Speak(content, from, to, subject, session, reply string) (
 	}
 
 	makeBlock := func() (string, int, string) {
-		// 发言人 = 前端填写的「发件人」；不再写死（发件人名写在标题 `# <发言人> No.<n>` 里，并作为 End 归属判定身份）。
+		// 发言人 = 前端填写的「发件人」；不再有缺省发言人，为空则直接报错（发件人是必填）。
 		speaker := strings.TrimSpace(from)
 		if speaker == "" {
-			speaker = chatSpeaker // 缺省回退（默认发言人）
+			return "", 0, "请填写发件人"
 		}
 		blocks := h.parseBlocks() // 只解析一次：解析要扫 CHAT.md + 全部归档，条数上百时开销明显
 		sessionLine, err, warn := chatSessionLine(speaker, blocks, session, reply)
