@@ -349,8 +349,17 @@ func chatSessionLine(speaker string, blocks []chatBlock, session, reply string, 
 		end = true
 		session = strings.TrimSpace(session[4:])
 	}
+	// 2026-09-17：`Tag.` 前缀在输入侧**可省略**（沟通室 Web 端的 Tag 输入框只填短名，如 `cup-quota-0917`）——
+	// 这里统一补全并规范化（`tag.` 大小写也归一），保证写入 CHAT.md 的始终是规范形式 `Tag.<短名>`。
+	if session != "" {
+		if len(session) > 4 && strings.EqualFold(session[:4], "Tag.") {
+			session = "Tag." + session[4:]
+		} else {
+			session = "Tag." + session
+		}
+	}
 	if !chatTagRE.MatchString(session) {
-		return "", "会话标签格式应为 Tag.<短名>（小写字母/数字/-/_，≤24 字符，如 Tag.api-ai-401）；结束会话写 `End: Tag.<短名>`", ""
+		return "", "会话标签格式应为 Tag.<短名>（**`Tag.` 前缀可省略**，只填短名即可；小写字母/数字/-/_，≤24 字符，如 Tag.api-ai-401）；结束会话写 `End: Tag.<短名>`", ""
 	}
 	known, closed := chatTags(blocks)
 	if end {
