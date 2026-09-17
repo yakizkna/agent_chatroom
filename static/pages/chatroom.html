@@ -264,6 +264,21 @@ function switchLang(){
   paint(); setHint('', '');
 }
 
+// 元数据显示本地化：en 模式下把中文标签前缀替换为英文显示（仅显示，不改写文件）。
+// 老帖存的是中文标签；这里在渲染时做行首标签映射，使英文界面标签为英文。
+function localizeMeta(lines){
+  if (curLang() !== 'en') return lines;
+  var map = {'时间：':'Time:', '收件人：':'To:', '主题：':'Subject:', '对话：':'Conversation:', '会话：':'Conversation:'};
+  return lines.map(function(l){
+    for (var k in map){
+      var prefix = '- ' + k;
+      var idx = l.indexOf(prefix);
+      if (idx === 0){ return '- ' + map[k] + l.slice(prefix.length); }
+    }
+    return l;
+  });
+}
+
 // ---- JWT 登录门禁 & 聊天室切换 ----
 var token = localStorage.getItem('chat_jwt') || '';
 // 聊天室切换：currentRoom=当前选中的聊天室 id（''=让后端用缺省房=唯一/首房）；rooms=后端返回的聊天室列表
@@ -579,7 +594,7 @@ function blockHtml(b){
   h.push('</div>');
   // 元数据**按原始格式逐行**渲染（`- 时间：/ - 收件人：/ - 主题：` 各占一行）；
   // `- 对话：` 行由标题徽标表达，不在这里重复（2026-09-15 用户明确：元数据保持原样）。
-  if (b.metaLines.length) h.push('<div class="blk-meta">' + render(b.metaLines.join('\n')) + '</div>');
+  if (b.metaLines.length) h.push('<div class="blk-meta">' + render(localizeMeta(b.metaLines).join('\n')) + '</div>');
   h.push('<div class="blk-body">' + render(b.body) + '</div>');
   h.push('</section>');
   return h.join('');
