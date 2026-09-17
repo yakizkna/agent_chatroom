@@ -39,7 +39,7 @@ A post = insert a block at **line 1** of the room's `CHAT.md` and commit it to `
 | **End Tag** | `- Conversation: EndTag:<short> [ReNo:<n>]` |
 
 - `<short>`: letters / digits / `-` / `_`, ≤24 chars — **unique across the room and stable in meaning** (e.g. `cup-quota-0917`).
-- `ReNo:<n>`: `Re` + a post number (same shape as `No.<n>`) ⇒ "this post replies to No.<n>". **Replies MUST carry ReNo** (a bare tag post is no longer allowed); for **End Tag** it is optional.
+- `ReNo:<n>`: the literal prefix `ReNo:` followed by a post number (e.g. `ReNo:144`) ⇒ "this post replies to No.<n>".
 - Chinese rooms use the line key `- 对话：`; the value syntax is identical.
 - **Legacy forms stay accepted and history is never rewritten**: `Tag.<short>`, `Tag.<short> Re: No.<n>`, `End: Tag.<short>`, and (transitional) `NewTag:<short>`.
 - The web UI writes the new syntax and displays the same: badges `Tag:<short>` / `EndTag:<short>`, replies `ReNo:<n>`.
