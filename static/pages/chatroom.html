@@ -32,6 +32,10 @@
   .panel .fld.grow input { flex:1 1 auto; min-width:160px; }
   .panel .lbl { flex:0 0 auto; color:#e3b341; font-family:ui-monospace,Menlo,monospace;
                 font-size:13px; user-select:none; white-space:nowrap; }
+  /* 「普通发言」开关：本条不带对话 Tag（不写「对话：」行）。.on = 当前处于该模式 */
+  .panel button.mini { padding:6px 12px; font-size:12.5px; background:transparent; color:var(--soft); }
+  .panel button.mini:hover { color:var(--ink); border-color:var(--acc); }
+  .panel button.mini.on { background:#e3b341; border-color:#e3b341; color:#0b0d12; font-weight:600; }
   .panel .row { display:flex; gap:12px; margin-bottom:12px; }
   .panel .row .wide { flex:1; }
   input, textarea#msg { flex:1; background:#0b0d12; color:var(--ink); border:1px solid var(--line);
@@ -153,6 +157,7 @@
     <label class="fld"><span class="lbl">Tag</span><input id="session" class="t" type="text" list="taglist" autocomplete="off" readonly></label>
     <datalist id="taglist"></datalist>
     <label class="fld"><span class="re-prefix" data-i18n="fld.reply">ReNo</span><input id="reply" class="xs" type="text" autocomplete="off" readonly></label>
+    <button type="button" id="plainBtn" class="mini" data-i18n="btn.plain">普通发言</button>
     <label class="chk">
       <input type="checkbox" id="createTag"> <span data-i18n="fld.create">创建Tag</span>
     </label>
@@ -177,6 +182,7 @@ var I18N = {
     'login.expired': '登录已失效，请重新登录', 'logout.done': '已登出',
     'logout': '登出', 'lang.switch': 'EN', 'room.sel': '切换聊天室',
     'fld.from': '发件人', 'fld.to': '收件人', 'fld.subject': '主题', 'fld.create': '创建Tag', 'fld.end': '结束Tag', 'fld.reply': 'ReNo',
+    'btn.plain': '普通发言', 'btn.plain.tip': '不带对话 Tag 的发言（不写「对话：」行）：点击切换；点某条发言的标题会自动回到「回复」模式',
     'speak': '发言', 'update': '刷新', 'loading': '加载中…',
     'ph.from': '发件人自定义', 'ph.to': '所有人', 'ph.subject': '留空取正文首行', 'ph.session': '默认只读：点上一条标题自动填；勾选「创建Tag」后可填新短名（如 cup-quota-0917）',
     'ph.reply': '编号', 'ph.msg': '输入要说的话，Ctrl/⌘+回车 发送…',
@@ -205,6 +211,7 @@ var I18N = {
     'warn.into.re': '，并回应 %s',
     'warn.noopen.default': '未填对话 Tag：按缺省值应归入 %s（该主题仍在讨论中）',
     'warn.noopen': '当前没有进行中的会话，可填入一个新的短名开新主题（不用写 Tag. 前缀）',
+    'warn.plain': '本条为普通发言（不含对话 Tag，不写「对话：」行）',
     'fld.fillnote': '收件人 %s', 'fld.fillreply': '，回复 %s', 'fld.fillconvo': '，对话 %s',
     'fld.none': '（无可用字段）', 'sep.list': '、'
   },
@@ -214,6 +221,7 @@ var I18N = {
     'login.expired': 'Session expired, please log in again', 'logout.done': 'Logged out',
     'logout': 'Logout', 'lang.switch': '中', 'room.sel': 'Switch room',
     'fld.from': 'From', 'fld.to': 'To', 'fld.subject': 'Subject', 'fld.create': 'New Tag', 'fld.end': 'End Tag', 'fld.reply': 'ReNo',
+    'btn.plain': 'Plain post', 'btn.plain.tip': 'Post without a conversation tag (no "Conversation:" line): click to toggle; clicking a post title switches back to reply mode',
     'speak': 'Post', 'update': 'Refresh', 'loading': 'Loading…',
     'ph.from': 'Custom sender', 'ph.to': 'Everyone', 'ph.subject': 'Leave empty to use first line', 'ph.session': 'Read-only by default: click a post title to fill; check "New Tag" to type a new short name',
     'ph.reply': 'No.', 'ph.msg': 'Type your message, Ctrl/⌘+Enter to send…',
@@ -240,6 +248,7 @@ var I18N = {
     'warn.into': 'This post goes to conversation %s%s', 'warn.into.re': ' and replies to %s',
     'warn.noopen.default': 'No Tag filled: defaults to open topic %s (still in discussion)',
     'warn.noopen': 'No active conversation; fill a new short name to start one (no Tag. prefix)',
+    'warn.plain': 'Plain post (no conversation tag; no "Conversation:" line)',
     'fld.fillnote': 'To: %s', 'fld.fillreply': ', reply %s', 'fld.fillconvo': ', conversation %s',
     'fld.none': '(no fields)', 'sep.list': ', '
   }
@@ -272,6 +281,7 @@ function applyI18n(){
   if (lb) lb.textContent = t('lang.switch');
   // 房间下拉提示
   roomSel && (roomSel.title = t('room.sel'));
+  plainBtn && (plainBtn.title = t('btn.plain.tip'));
 }
 function switchLang(){
   localStorage.setItem('chat_lang', curLang() === 'en' ? 'zh' : 'en');
@@ -368,6 +378,7 @@ var session = document.getElementById('session');
 var reply = document.getElementById('reply');
 var endTag = document.getElementById('endTag');
 var createTag = document.getElementById('createTag');
+var plainBtn = document.getElementById('plainBtn');
 var taglist = document.getElementById('taglist');
 var logoutBtn = document.getElementById('logoutBtn');
 var roomSel = document.getElementById('roomSel');
@@ -577,6 +588,15 @@ var archiveName = '';  // 上述归档的文件名（用于分隔条文案）
 var filterTag = '';    // 「只看某会话」的标签（'' = 全部）
 var closedTags = {};   // 已结束（End）的标签 —— 按规则不可再引用
 var lastAutoTag = '', lastAutoReply = '', lastAutoTo = '';   // 上次自动回填的缺省值（避免覆盖用户手输）
+// 「普通发言」模式（2026-09-17 用户要）：本条**不带对话 Tag** ⇒ 服务端不写「对话：」行。
+// 默认关（=接续/回复上一条）；开启时清空 Tag/ReNo 并取消「创建/结束Tag」，且不被 applyDefault 回填。
+var plainPost = false;
+function syncPlainBtn(){ if (plainBtn) plainBtn.className = plainPost ? 'mini on' : 'mini'; }
+function setPlainPost(on){
+  plainPost = !!on;
+  if (plainPost){ createTag.checked = false; endTag.checked = false; session.value = ''; reply.value = ''; syncTagInputs(); }
+  syncPlainBtn(); warnTag();
+}
 function selfSpeaker(){ return from.value.trim(); }   // 当前发言人 = 填写的「发件人」（必填，无缺省）
 
 // ---- 发言块与会话字段解析（规则见聊天室仓库 README 核心规则 8）----
@@ -750,8 +770,10 @@ function applyDefault(p){
   // UI 规则（2026-09-17 用户定）：Tag / 回复No. 的默认值 = **上一条发言**（最新一条）的 Tag / No.；没有就留空。
   var last = p.blocks.length ? p.blocks[0] : null;
   var dTag = last ? bareTag(last.tag) : '', dReply = (last && last.no) ? last.no.slice(3) : '';
-  if (!createTag.checked && (session.value.trim() === '' || session.value.trim() === lastAutoTag)) session.value = dTag;
-  if (reply.value.trim() === '' || reply.value.trim() === lastAutoReply) reply.value = dReply;
+  if (!plainPost){   // 普通发言模式：Tag/ReNo 保持空（不被默认值回填）
+    if (!createTag.checked && (session.value.trim() === '' || session.value.trim() === lastAutoTag)) session.value = dTag;
+    if (reply.value.trim() === '' || reply.value.trim() === lastAutoReply) reply.value = dReply;
+  }
   lastAutoTag = dTag;
   lastAutoReply = dReply;
 
@@ -803,6 +825,8 @@ function warnTag(){
   var knownTags = {};                  // 该 Tag 是否已存在
   p.blocks.forEach(function(b){ if (b.tag) knownTags[b.tag] = 1; });
 
+  // 普通发言（不带对话 Tag）：无需 Tag/ReNo ⇒ 放行（服务端 session/reply 为空时不写「对话：」行）
+  if (plainPost && !createTag.checked && !endTag.checked){ setHint(t('warn.plain'), 'ok'); return; }
   // 结束行为：Tag 为空 ⇒ 提示点击某条发言的标题，选择要结束的对话
   if (endTag.checked){
     if (!v){ setHint(t('warn.end.needtag'), 'err'); return; }
@@ -903,6 +927,8 @@ box.addEventListener('click', function(e){
       note += (sn ? t('fld.fillreply', 'No.' + sn) : '') + t('fld.fillconvo', tagLabel(st));
     }
     createTag.checked = false;                 // 点标题 = 回复行为 ⇒ 退出创建态
+    plainPost = false;                         // 同理退出「普通发言」模式（点某条 = 回复它）
+    syncPlainBtn();
     syncTagInputs();
     // ⚠️ 这里**不能**把刚填的值写进 lastAuto*：applyDefault() 的判定是「值 == lastAuto* 就当成
     // 「还停在自动默认值」并覆盖为默认」，而填完的值恰好等于 lastAuto* ⇒ 下一次重绘（点徽标筛选、
@@ -929,12 +955,20 @@ function syncTagInputs(){
 }
 createTag.addEventListener('change', function(){
   if (createTag.checked){ endTag.checked = false; reply.value = ''; }   // 互斥 + 清空回复No.
+  plainPost = false; syncPlainBtn();                                    // 创建 = 对话行为 ⇒ 退出普通发言
   syncTagInputs(); warnTag();
 });
 endTag.addEventListener('change', function(){
   if (endTag.checked){ createTag.checked = false; }
+  plainPost = false; syncPlainBtn();                                    // 结束 = 对话行为 ⇒ 退出普通发言
   syncTagInputs(); warnTag();
 });
+// 「普通发言」开关：开 ⇒ 清空 Tag/ReNo（本条不带对话）；关 ⇒ 回到缺省（回复上一条）
+plainBtn.addEventListener('click', function(){
+  if (plainPost){ plainPost = false; syncPlainBtn(); applyDefault(allParsed()); warnTag(); }
+  else setPlainPost(true);
+});
+syncPlainBtn();
 
 function load(){
   busy(true); setHint(t('hi.reading'),'spinner');
@@ -970,7 +1004,7 @@ function speak(){
   if(!from.value.trim()){ setHint(t('err.speaker'),'err'); return; }
   var short = bareTag(session.value), tag = fullTag(session.value);   // 短名 / 内部规范 Tag.<短名>
   var p = allParsed(), isEnd = endTag.checked, isCreate = createTag.checked && !isEnd;
-  if(!short){ setHint(t(isEnd ? 'warn.end.needtag' : isCreate ? 'warn.create.needtag' : 'warn.noopen'),'err'); return; }
+  if(!short && (isEnd || isCreate)){ setHint(t(isEnd ? 'warn.end.needtag' : 'warn.create.needtag'),'err'); return; }
   if(isEnd){
     var owner = tagOwner(p, tag);
     if(owner && owner !== selfSpeaker()){
@@ -982,10 +1016,11 @@ function speak(){
   busy(true); setHint(t('hi.sending'),'spinner');
   apiFetch('/api/chat/speak' + roomQuery(), {method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({content: v, from: from.value.trim(), to: to.value.trim(), subject: subject.value.trim(),
-                              session: (isEnd ? 'EndTag:' : 'Tag:') + short, reply: reply.value.trim(),
+                              session: short ? ((isEnd ? 'EndTag:' : 'Tag:') + short) : '',
+                              reply: short ? reply.value.trim() : '',
                               create: isCreate, lang: curLang()})})
     .then(r=>r.json()).then(function(j){
-      if(j.ok){ msg.value=''; reply.value=''; endTag.checked=false; createTag.checked=false; syncTagInputs(); setHint(t('hi.sent'),'ok'); localStorage.setItem('chat_from', from.value.trim()); load(); }
+      if(j.ok){ msg.value=''; reply.value=''; endTag.checked=false; createTag.checked=false; plainPost=false; syncPlainBtn(); syncTagInputs(); setHint(t('hi.sent'),'ok'); localStorage.setItem('chat_from', from.value.trim()); load(); }
       else setHint(j.error||t('err.speakfail'),'err');
     }).catch(e=>{ if(e.message!=='unauthorized') setHint(t('err.reqfail')+e,'err'); }).finally(()=>busy(false));
 }
