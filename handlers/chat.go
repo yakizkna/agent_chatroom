@@ -360,7 +360,7 @@ func chatDupNo(blocks []chatBlock, no int) bool {
 
 // chatSessionLine 把「对话 / 回应」参数规范成元数据行；校验标签语法、End 权限与「End 后不可再引用」。
 // 返回 (line, err, warn)：line 空且 err 非空＝拒绝；warn 非空＝照发但提示。
-func chatSessionLine(speaker string, blocks []chatBlock, session, reply string, en bool) (string, string, string) {
+func chatSessionLine(speaker string, blocks []chatBlock, session, reply string, en, create bool) (string, string, string) {
 	session = strings.TrimSpace(session)
 	reply = strings.TrimSpace(reply)
 	reply = regexp.MustCompile(`^Re:\s*`).ReplaceAllString(reply, "")
@@ -401,6 +401,14 @@ func chatSessionLine(speaker string, blocks []chatBlock, session, reply string, 
 	tag := "Tag." + session  // 内部规范 key（下文校验一律用它）
 	disp := "Tag:" + session // 提示文案里给人看的显示形式
 	known, closed := chatTags(blocks)
+	// 2026-09-17 新规则：① 回复**必须**带 ReNo（不再允许「只带 Tag 的自由发言」）—— 仅对**已存在**的 Tag 生效，
+	// 新建 Tag 时无对象可回复，允许不带；② 「创建 Tag」勾选时该短名必须不存在（互斥语义）。
+	if create && known[tag] {
+		return "", fmt.Sprintf("会话 %s 已存在，不能「创建 Tag」—— 请直接回复它（Tag:<短名> ReNo.<n>），或换一个短名", disp), ""
+	}
+	if !end && known[tag] && reply == "" {
+		return "", fmt.Sprintf("会话 %s 已存在 —— 回复它必须带回应编号（Tag:<短名> ReNo.<n>，指明回应哪一条）", disp), ""
+	}
 	if end {
 		if !known[tag] {
 			return "", fmt.Sprintf("会话 %s 从未出现过，无需 EndTag（如只是想开新会话，请直接用 NewTag:<短名>）", disp), ""
@@ -435,13 +443,10 @@ func chatSessionLine(speaker string, blocks []chatBlock, session, reply string, 
 	if en {
 		line = "- Conversation: "
 	}
-	switch {
-	case end:
-		line += "EndTag:" + session
-	case !known[tag]:
-		line += "NewTag:" + session
-	default:
-		line += "Tag:" + session
+	if end {
+		line += "EndTag:" + session // 结束：EndTag:<短名>（可带 ReNo.<n>）
+	} else {
+		line += "Tag:" + session // 创建与回复同为 Tag:<短名>（回复必带 ReNo.<n>，见上方校验）
 	}
 	if reply != "" {
 		line += " ReNo." + strings.TrimPrefix(reply, "No.")
@@ -686,7 +691,7 @@ func truncateRune(s string, n int) string {
 
 // Speak 把输入格式化后插入 CHAT.md 最上方，commit 并 push 到 origin/master。
 // 返回 (ok, contentOrErr, warnings)。
-func (h *ChatHandler) Speak(content, from, to, subject, session, reply, lang string) (bool, string, []string) {
+func (h *ChatHandler) Speak(content, from, to, subject, session, reply, lang string, create bool) (bool, string, []string) {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return false, "内容为空", nil
@@ -731,7 +736,7 @@ func (h *ChatHandler) Speak(content, from, to, subject, session, reply, lang str
 			return "", 0, "请填写发件人"
 		}
 		blocks := h.parseBlocks() // 只解析一次：解析要扫 CHAT.md + 全部归档，条数上百时开销明显
-		sessionLine, err, warn := chatSessionLine(speaker, blocks, session, reply, en)
+		sessionLine, err, warn := chatSessionLine(speaker, blocks, session, reply, en, create)
 		if err != "" {
 			return "", 0, err
 		}
@@ -934,6 +939,7 @@ func (cr *ChatRooms) Update(c *gin.Context) {
 func (cr *ChatRooms) SpeakHTTP(c *gin.Context) {
 	var req struct {
 		Content, From, To, Subject, Session, Reply, Lang string
+		Create                                           bool // 「创建 Tag」勾选（该短名必须不存在）
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "invalid request"})
@@ -946,7 +952,7 @@ func (cr *ChatRooms) SpeakHTTP(c *gin.Context) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	ok, contentOrErr, warns := h.Speak(req.Content, req.From, req.To, req.Subject, req.Session, req.Reply, req.Lang)
+	ok, contentOrErr, warns := h.Speak(req.Content, req.From, req.To, req.Subject, req.Session, req.Reply, req.Lang, req.Create)
 	if !ok {
 		c.JSON(http.StatusOK, gin.H{"ok": false, "error": contentOrErr})
 		return
