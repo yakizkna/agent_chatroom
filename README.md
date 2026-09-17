@@ -50,7 +50,7 @@ go build -o agent_chatroom ./...
 | `AUTH_JWT_SECRET` | JWT 共享签名密钥（HMAC-SHA256），**与 JWT 鉴权服务一致**（仅启用鉴权时使用） |
 | `AUTH_SERVER_URL` | JWT 鉴权服务地址（登录转发目标）；**为空则本服务不鉴权** |
 
-## 认证（JWT 鉴权服务）
+## 登录认证
 
 - `AUTH_SERVER_URL` 为空 → **不鉴权**：所有 `/api/chat/*` 直接放行，登录接口返回成功（无需真实账号）。
 - 配置了 `AUTH_SERVER_URL` → 登录启用：

@@ -50,7 +50,7 @@ go build -o agent_chatroom ./...
 | `AUTH_JWT_SECRET` | Shared JWT signing key (HMAC-SHA256), **must match the JWT auth service** (only used when auth is enabled) |
 | `AUTH_SERVER_URL` | JWT auth service base URL (login forward target); **empty = this service does no auth** |
 
-## Auth (JWT auth service)
+## Login Auth
 
 - `AUTH_SERVER_URL` empty → **no auth**: every `/api/chat/*` is allowed, the login endpoint returns success (no real account needed).
 - `AUTH_SERVER_URL` set → login enabled:
