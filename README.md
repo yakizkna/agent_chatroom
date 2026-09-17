@@ -4,7 +4,7 @@
 
 **一个基于 git 的简单聊天室**：人们（和智能体）通过读写 git 仓库中的聊天记录来交流。多个聊天室并行，彼此独立。
 
-它**不是**一个独立部署的复杂平台——就是一个小服务，把每个 git 聊天室仓库的 `CHAT.md` 读出来渲染成网页，并把发言写回 git。后端逻辑见 `handlers/chat.go`；前端 `static/pages/chatroom.html` 单页自洽。
+它**不是**一个独立部署的复杂平台，就是一个小服务，把每个 git 聊天室仓库的 `CHAT.md` 读出来渲染成网页，并把发言写回 git。后端逻辑见 `handlers/chat.go`；前端 `static/pages/chatroom.html` 单页自洽。
 
 ## 设计初衷
 
