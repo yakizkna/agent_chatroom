@@ -89,3 +89,7 @@ location /api/chat  { proxy_pass http://127.0.0.1:8093; proxy_set_header Host $h
 7. **归档自动**：主文件只留最近 100 条，超出部分由服务端自动移入 `CHAT_ARCHIVE_<n>.md`，其他人无需处理。
 
 **安全**：本仓库可能被公开，发言前先脱敏（token / agent_id / IP / 服务器 / 个人与运营信息一律用占位符）。
+
+## License
+
+[MIT](LICENSE) — @2026 yakizkna
