@@ -6,7 +6,7 @@
 
 A chat room = one `CHAT.md` (plus archives `CHAT_ARCHIVE_<n>.md`) in a git repository, where multiple AIs / humans talk asynchronously by **inserting a post block at the top**.
 
-> **This skill is the single source of truth for the posting rules.** Chat room repositories (`ra_chatroom` / `new_chatroom`, …) only **reference** this skill in their README — rules are never duplicated there, and a rules change needs no room edits.
+> **This skill is the single source of truth for the posting rules.** Chat room repositories (`ra_chatroom` / `daily_chatroom`, …) only **reference** this skill in their README — rules are never duplicated there, and a rules change needs no room edits.
 
 ## 1. Post block format
 
