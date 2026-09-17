@@ -182,6 +182,8 @@ var I18N = {
     'ph.reply': '编号', 'ph.msg': '输入要说的话，Ctrl/⌘+回车 发送…',
     'hi.reading': '读取中…', 'hi.pulling': '正在 pull 最新发言…', 'hi.sending': '正在发送并 push…',
     'hi.read': '已读取 %s 的 CHAT.md（仓库：%s）%s', 'hi.arch': ' + 归档 %s',
+    // 跳转/深链找不到目标编号时的提示（目标可能落在更早、未显示的归档里）
+    'hint.anchor.none': '未找到 %s —— 它可能在更早的归档里（本页只显示 CHAT.md 最近 100 条 + 最新一份归档）',
     'hi.refreshed': '已刷新', 'hi.refreshwitharch': '（含归档 %s）',
     'hi.sent': '已发言', 'hi.filled': '已填充：%s',
     'hf.onlytag': '只看对话 %s（%s 条）', 'hf.clearing': '取消筛选',
@@ -217,6 +219,7 @@ var I18N = {
     'ph.reply': 'No.', 'ph.msg': 'Type your message, Ctrl/⌘+Enter to send…',
     'hi.reading': 'Loading…', 'hi.pulling': 'Pulling latest posts…', 'hi.sending': 'Posting and pushing…',
     'hi.read': 'Read CHAT.md of %s (repo: %s)%s', 'hi.arch': ' + archive %s',
+    'hint.anchor.none': '%s not found — it may be in an older archive (this page shows only the latest 100 blocks of CHAT.md plus the newest archive file)',
     'hi.refreshed': 'Refreshed', 'hi.refreshwitharch': ' (with archive %s)',
     'hi.sent': 'Posted', 'hi.filled': 'Filled: %s',
     'hf.onlytag': 'Only conversation %s (%s posts)', 'hf.clearing': 'Clear filter',
@@ -386,14 +389,31 @@ function renderRooms(list, cur){
   roomSel.value = cur;
   currentRoom = cur;
   localStorage.setItem('chat_room', cur);
+  // 把「后端实际解析出的房间」（含缺省房 / 选中项缺失时的回退）也同步进 URL，
+  // 保留 hash（首次带 `#no-N` 深链进来时要留住它）。
+  syncUrl(true);
 }
 // 下拉切换聊天室 → 重新读取该聊天室内容
 roomSel.addEventListener('change', function(){
   if (roomSel.value === currentRoom) return;
   currentRoom = roomSel.value;
   localStorage.setItem('chat_room', currentRoom);
+  syncUrl(false);          // 房间已变：URL 跟上，并丢掉旧房间的 #no-N 锚点
   load();
 });
+
+// ── URL ↔ 房间同步【2026-09-17 修】──────────────────────────────────────────────
+// 症状：下拉切换房间后，URL 里的 `?room=` 从不更新；而 `?room=` 又**优先于** localStorage，
+//   于是「切换房间 → 点 ReNo」只会给地址栏加个 `#no-N`、room 仍是旧值
+//   ⇒ 刷新 / 分享 / 复制链接都会落回**旧房间**（用户报：「只改变 no 锚点，room 未变」）。
+// 规则：currentRoom 一变就把 URL 同步过去；用 replaceState **不刷历史**（切房不进后退栈）；
+//   切房时清掉旧锚点（那个 `#no-N` 属于旧房间的内容，留着无意义且会误导）。
+function syncUrl(keepHash){
+  try {
+    var q = currentRoom ? ('?room=' + encodeURIComponent(currentRoom)) : '';
+    history.replaceState(null, '', location.pathname + q + (keepHash ? location.hash : ''));
+  } catch (e) { /* 个别环境禁用 history（如 file://）→ 静默忽略 */ }
+}
 
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
                             .replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -819,11 +839,25 @@ function warnTag(){
   setHint(t('warn.noopen'), '');
 }
 
+// 深链跳转：`?room=X#no-N` 打开 / 刷新后要**真的滚到**那条发言 ——
+// 内容是异步 innerHTML 插入的，浏览器不会为「后插入的元素」自动重试锚点跳转，故显式滚一次。
+// 目标不在当前显示范围（更早的归档未加载）时给出明确提示，而不是「点了没反应」。
+var lastHashScrolled = '';   // 同一锚点只自动滚一次（否则每次发言/刷新都会跳回老位置）
+function scrollToHash(){
+  var h = (location.hash || '').replace(/^#/, '');
+  if (!h || h === lastHashScrolled) return;
+  lastHashScrolled = h;
+  var el = document.getElementById(h);
+  if (el && el.scrollIntoView) { el.scrollIntoView({block: 'start'}); return; }
+  setHint(t('hint.anchor.none', 'No.' + h.replace(/^no-/, '')), 'err');
+}
+
 function show(content, note, archive, archName){
   rawMd = content;
   rawArchive = archive || '';
   archiveName = archName || '';
   paint();
+  scrollToHash();
   if(note) setHint(note, 'ok');
 }
 
@@ -837,6 +871,18 @@ box.addEventListener('click', function(e){
     filterTag = (filterTag === v) ? '' : v;
     paint();
     return;
+  }
+  // 点 ReNo 链接（href="#no-N"）= 跳到被回应的那条发言。
+  // 显式滚动：hash 已是目标时浏览器不会再滚（连点同一条会「没反应」）；
+  // 目标不存在（更早的归档未加载）时给提示，而不是默默只改地址栏。
+  // ⚠️ 必须放在下面的「点标题条 = 填表单」分支**之前**：a.re 就在 .blk-title 里面。
+  var re = (t && t.closest) ? t.closest('a.re') : null;
+  if (re){
+    var rid = (re.getAttribute('href') || '').replace(/^#/, '');
+    var rel = rid ? document.getElementById(rid) : null;
+    if (rel && rel.scrollIntoView) { rel.scrollIntoView({block: 'start'}); lastHashScrolled = rid; }
+    else setHint(t('hint.anchor.none', 'No.' + rid.replace(/^no-/, '')), 'err');
+    return;   // ReNo 是链接（语义=跳转），不再走下面的填充逻辑
   }
   // 点击任一条的标题条 → 自动填充回复表单（收件人=发言人；仅当该条带 Tag 时才一并填 Tag 与 Re:No，
   // 因为规则要求 Re 必须与 Tag 同行，否则不合规）
