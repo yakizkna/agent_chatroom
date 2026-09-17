@@ -20,10 +20,24 @@ is_running() {
   [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
 }
 
+# 按端口找监听进程（「没有 pidfile 的孤儿实例」兜底用；macOS 用 lsof -t）
+port_pids() {
+  lsof -nP -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true
+}
+
 do_start() {
   if is_running; then
     echo "agent_chatroom 已在运行（pid $(cat "$PIDFILE")）"
     return 0
+  fi
+  # 端口被占但不在 pidfile 里 ⇒ 多半是孤儿实例（历史上手动 nohup 启动、无 pidfile）：
+  # 直接说清原因并让用户先 stop，避免「构建成功却静默 bind 失败」这种难查的假象。
+  local orphans
+  orphans=$(port_pids)
+  if [ -n "$orphans" ]; then
+    echo "端口 ${PORT} 已被占用（pid: $(echo "$orphans" | tr '\n' ' ')），但不在 ${PIDFILE} 中 ⇒ 无 pidfile 的孤儿实例。" >&2
+    echo "请先执行：$0 stop （它会按端口兜底结束该实例）" >&2
+    return 1
   fi
   go build -o "$BIN" .
   if [ -f .env ]; then
@@ -42,24 +56,44 @@ do_start() {
 }
 
 do_stop() {
-  if ! is_running; then
-    echo "agent_chatroom 未在运行"
+  if is_running; then
+    local pid
+    pid=$(cat "$PIDFILE")
+    kill "$pid" 2>/dev/null || true
+    for _ in $(seq 1 20); do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.2
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "强制结束 $pid"
+      kill -9 "$pid" 2>/dev/null || true
+    fi
     rm -f "$PIDFILE"
+    echo "agent_chatroom 已停止"
     return 0
   fi
-  local pid
-  pid=$(cat "$PIDFILE")
-  kill "$pid" 2>/dev/null || true
-  for _ in $(seq 1 20); do
-    kill -0 "$pid" 2>/dev/null || break
-    sleep 0.2
-  done
-  if kill -0 "$pid" 2>/dev/null; then
-    echo "强制结束 $pid"
-    kill -9 "$pid" 2>/dev/null || true
+  # 无 pidfile（或 pidfile 已过期）：按端口兜底 —— 否则「孤儿实例占着端口」会让 restart 报
+  # 「未在运行」却杀不掉旧的，紧接着 start 又因 bind 失败而退出（2026-09-17 踩过）。
+  local orphans
+  orphans=$(port_pids)
+  if [ -n "$orphans" ]; then
+    echo "未找到 ${PIDFILE}，但端口 ${PORT} 被占用（pid: $(echo "$orphans" | tr '\n' ' ')）⇒ 按端口结束孤儿实例"
+    kill $orphans 2>/dev/null || true
+    for _ in $(seq 1 20); do
+      if [ -z "$(port_pids)" ]; then break; fi
+      sleep 0.2
+    done
+    orphans=$(port_pids)
+    if [ -n "$orphans" ]; then
+      echo "强制结束 $(echo "$orphans" | tr '\n' ' ')"
+      kill -9 $orphans 2>/dev/null || true
+    fi
+    rm -f "$PIDFILE"
+    echo "agent_chatroom 已停止（按端口兜底）"
+    return 0
   fi
   rm -f "$PIDFILE"
-  echo "agent_chatroom 已停止"
+  echo "agent_chatroom 未在运行"
 }
 
 case "${1:-}" in
