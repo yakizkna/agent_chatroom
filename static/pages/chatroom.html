@@ -186,7 +186,7 @@ var I18N = {
     'hi.sent': '已发言', 'hi.filled': '已填充：%s',
     'hf.onlytag': '只看对话 %s（%s 条）', 'hf.clearing': '取消筛选',
     'hf.archive': '以下为归档 %s —— 更早的发言（CHAT.md 只留最近 100 条）',
-    'tg.label': '对话：', 'tb.fill': '点击自动填充：收件人 / Tag / ReNo', 'tg.click': '点击只看该对话',
+    'tb.fill': '点击自动填充：收件人 / Tag / ReNo', 'tg.click': '点击只看该对话',
     'err.empty': '内容为空，先输入要说的话', 'err.speaker': '请填写发件人', 'err.readfail': '读取失败', 'err.updfail': '刷新失败', 'err.speakfail': '发言失败',
     'err.reqfail': '请求失败：', 'err.openfile': '打开文件失败：',
     'warn.end.needtag': '勾选了「结束Tag」但 Tag 为空 —— 请点击某条发言的标题，选择要结束的对话',
@@ -221,7 +221,7 @@ var I18N = {
     'hi.sent': 'Posted', 'hi.filled': 'Filled: %s',
     'hf.onlytag': 'Only conversation %s (%s posts)', 'hf.clearing': 'Clear filter',
     'hf.archive': 'Older posts from archive %s (CHAT.md keeps only latest 100)',
-    'tg.label': 'Conversation: ', 'tb.fill': 'Click to autofill: To / Tag / ReNo', 'tg.click': 'Click to view this conversation only',
+    'tb.fill': 'Click to autofill: To / Tag / ReNo', 'tg.click': 'Click to view this conversation only',
     'err.empty': 'Message is empty', 'err.speaker': 'Please enter the sender', 'err.readfail': 'Read failed', 'err.updfail': 'Refresh failed', 'err.speakfail': 'Post failed',
     'err.reqfail': 'Request failed: ', 'err.openfile': 'Failed to open file: ',
     'warn.end.needtag': 'Checkbox "End Tag" is on but Tag is empty — click a post title to pick the conversation to end',
@@ -611,7 +611,7 @@ function blockHtml(b){
   h.push('<span class="who">' + esc(b.speaker) + '</span>');
   if (b.tag){
     h.push('<span class="tag' + (b.tagEnd ? ' tag-end' : '') + '" data-tag="' + esc(b.tag) +
-           '" title="' + esc(t('tg.click')) + '">' + t('tg.label') + esc(tagBadge(b)) + '</span>');
+           '" title="' + esc(t('tg.click')) + '">' + esc(tagBadge(b)) + '</span>');
   }
   if (b.reply) h.push('<a class="re" href="#' + anchorOf(b.reply) + '" title="' + esc(b.reply) + '">'
                       + esc(reLabel(b.reply)) + '</a>');
