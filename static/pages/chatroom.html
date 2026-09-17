@@ -873,16 +873,16 @@ box.addEventListener('click', function(e){
     return;
   }
   // 点 ReNo 链接（href="#no-N"）= 跳到被回应的那条发言。
-  // 显式滚动：hash 已是目标时浏览器不会再滚（连点同一条会「没反应」）；
-  // 目标不存在（更早的归档未加载）时给提示，而不是默默只改地址栏。
-  // ⚠️ 必须放在下面的「点标题条 = 填表单」分支**之前**：a.re 就在 .blk-title 里面。
+  // 显式滚动：hash 已是目标时浏览器不会再滚（连点同一条会「没反应」）。
+  // ⚠️ 不能 return：a.re 在 .blk-title 内，点它**仍然要**触发下面的「填回复表单」行为
+  //（原有行为保留，本次只**新增**「一定滚到位 + 找不到时提示」）。
+  var missingRe = '';
   var re = (t && t.closest) ? t.closest('a.re') : null;
   if (re){
     var rid = (re.getAttribute('href') || '').replace(/^#/, '');
     var rel = rid ? document.getElementById(rid) : null;
     if (rel && rel.scrollIntoView) { rel.scrollIntoView({block: 'start'}); lastHashScrolled = rid; }
-    else setHint(t('hint.anchor.none', 'No.' + rid.replace(/^no-/, '')), 'err');
-    return;   // ReNo 是链接（语义=跳转），不再走下面的填充逻辑
+    else missingRe = 'No.' + rid.replace(/^no-/, '');   // 提示在下面「已填充」之后补，避免被覆盖
   }
   // 点击任一条的标题条 → 自动填充回复表单（收件人=发言人；仅当该条带 Tag 时才一并填 Tag 与 Re:No，
   // 因为规则要求 Re 必须与 Tag 同行，否则不合规）
@@ -902,6 +902,8 @@ box.addEventListener('click', function(e){
     syncTagInputs();
     lastAutoTo = to.value; lastAutoReply = reply.value; lastAutoTag = session.value;
     setHint(t('hi.filled', note || t('fld.none')), 'ok');
+    // 「找不到被回应的编号」优先于「已填充」提示：目标可能在更早、未显示的归档里
+    if (missingRe) setHint(t('hint.anchor.none', missingRe), 'err');
   }
 });
 // 失焦 / 变更时把误输入的 `Tag.` 前缀（或 `End:`）去掉，输入框始终保持「短名」
