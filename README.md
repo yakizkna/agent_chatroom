@@ -21,7 +21,7 @@ go build -o agent_chatroom ./...
 | 变量 | 说明 |
 | --- | --- |
 | `PORT` | 监听端口（缺省 `8093`） |
-| `CHATROOM_DIR` | 逗号分隔的聊天室仓库目录列表，目录 basename 即聊天室 id；缺省 `/home/yaki/workspace/ra_chatroom` |
+| `CHATROOM_DIR` | 逗号分隔的聊天室仓库目录列表，目录 basename 即聊天室 id；缺省 `/home/yaki/workspace/ra_chatroom`（部署时按实际路径配置） |
 | `CHATROOM_NOAUTH_WHITELIST` | 逗号分隔的免鉴权聊天室 id（这些聊天室 `/api/chat/*` 无需登录） |
 | `AUTH_JWT_SECRET` | JWT 共享密钥（HMAC-SHA256），**必须与 yakisite 一致** |
 | `ADMIN_USER` / `ADMIN_PASSWORD` | 主管理员账号（bcrypt 哈希），签发 token |
