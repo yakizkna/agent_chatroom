@@ -592,7 +592,7 @@ function blockHtml(b){
   h.push('<span class="who">' + esc(b.speaker) + '</span>');
   if (b.tag){
     h.push('<span class="tag' + (b.tagEnd ? ' tag-end' : '') + '" data-tag="' + esc(b.tag) +
-           '" title="' + esc(t('tg.click')) + '">' + esc(b.tag) + (b.tagEnd ? ' · End' : '') + '</span>');
+           '" title="' + esc(t('tg.click')) + '">' + esc(tagLabel(b.tag)) + (b.tagEnd ? ' · End' : '') + '</span>');
   }
   if (b.reply) h.push('<a class="re" href="#' + anchorOf(b.reply) + '">' + t('tb.reply') + esc(b.reply) + '</a>');
   h.push('</div>');
@@ -657,9 +657,14 @@ function reNo(v){
 // Tag 输入：**只填短名**（无需 `Tag.` 前缀，如 cup-quota-0917）。
 // bareTag() 归一为短名（顺带吃掉 `End:` 前缀与误输入的 `Tag.`）；fullTag() 补回规范形式 Tag.<短名>。
 function bareTag(v){
-  return String(v == null ? '' : v).trim().replace(/^End:\s*/i, '').replace(/^Tag\./i, '').trim();
+  return String(v == null ? '' : v).trim().replace(/^End:\s*/i, '')
+         .replace(/^#/, '').replace(/^Tag\./i, '').trim();
 }
 function fullTag(v){ var b = bareTag(v); return b ? ('Tag.' + b) : ''; }
+
+// 标题行 Tag 徽标的**显示**文案：`Tag.<短名>` → `#<短名>`（2026-09-17 用户定，更短更直观）。
+// ⚠️ 纯显示层：`data-tag` 属性仍保存规范形式 `Tag.<短名>`（筛选 / 自动填充用），CHAT.md 一字不动。
+function tagLabel(v){ var b = bareTag(v); return b ? ('#' + b) : ''; }
 
 // 缺省值（规则 8）：主题还在讨论中 ⇒「当前会话 + 回应上一条」；上一个主题已 End ⇒ 留空待填新标签
 function applyDefault(p){
