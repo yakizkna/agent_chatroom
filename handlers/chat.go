@@ -33,10 +33,13 @@ var (
 	// 会话元数据识别 key：中文（正式「对话：」/兼容「会话：」）+ 英文（Conversation:/Session:）
 	chatSessionKeys = []string{"- 对话：", "- 会话：", "- Conversation:", "- Session:"}
 	// 时间锚点（用于识别发言块）：中英 2 种
-	chatTimeKeys = []string{"- 时间：", "- Time:"}
-	chatTagRE    = regexp.MustCompile(`^Tag\.[A-Za-z0-9_-]{1,24}$`)
-	chatReplyRE  = regexp.MustCompile(`^No\.\d+$`)
-	chatNoRE     = regexp.MustCompile(`No\.(\d+)`)
+	chatTimeKeys   = []string{"- 时间：", "- Time:"}
+	chatTagRE      = regexp.MustCompile(`^Tag\.[A-Za-z0-9_-]{1,24}$`) // 内部规范 key（Tag.<短名>）
+	chatTagShortRE = regexp.MustCompile(`^[A-Za-z0-9_-]{1,24}$`)      // 对话字段的短名
+	chatReplyRE    = regexp.MustCompile(`^No\.\d+$`)
+	// 「对话」字段里的回应编号：新语法 ReNo.<n>（与 No.<n> 同形）与旧写法 Re: No.<n> 都接受
+	chatReNoRE = regexp.MustCompile(`(?:ReNo\.|Re:\s*No\.)(\d+)`)
+	chatNoRE   = regexp.MustCompile(`No\.(\d+)`)
 	// 发言块标题行 `# <发言人> No.<n>` —— 归档按它切块，不依赖 `---` 分隔线
 	chatBlockHeadRE = regexp.MustCompile(`(?m)^# .*No\.(\d+)[ \t]*$`)
 	chatNoTrailRE   = regexp.MustCompile(`\s*No\.\d+\s*$`)
@@ -48,6 +51,42 @@ type chatBlock struct {
 	End     bool
 	Reply   string
 	Speaker string
+}
+
+// 对话字段语法（2026-09-17 用户定，统一到「解析 / 存储 / 显示」全链路）：
+//
+//	创建新 Tag：NewTag:<短名>
+//	回复   Tag：Tag:<短名> ReNo.<n>      （ReNo 可省 ⇒ 该 Tag 的一般性发言，非回复某人）
+//	带 Tag 发言：Tag:<短名>
+//	结束   Tag：EndTag:<短名>            （可带 ReNo.<n>）
+//
+// 兼容旧写法：Tag.<短名> / Tag.<短名> Re: No.<n> / End: Tag.<短名>（历史条目一律不动）。
+// parseChatSessionVal 把两种写法都归一到**内部规范** Tag（`Tag.<短名>`）+ End + Reply。
+func parseChatSessionVal(val string) (tag string, end bool, reply string) {
+	val = strings.TrimSpace(val)
+	if strings.HasPrefix(val, "EndTag:") {
+		end = true
+		val = strings.TrimSpace(val[len("EndTag:"):])
+	} else if strings.HasPrefix(val, "End:") {
+		end = true
+		val = strings.TrimSpace(val[len("End:"):])
+	}
+	if strings.HasPrefix(val, "NewTag:") {
+		val = strings.TrimSpace(val[len("NewTag:"):])
+	} else if strings.HasPrefix(val, "Tag:") {
+		val = strings.TrimSpace(val[len("Tag:"):])
+	}
+	if m := chatReNoRE.FindStringSubmatch(val); m != nil {
+		reply = "No." + m[1]
+		val = strings.TrimSpace(val[:strings.Index(val, m[0])])
+	}
+	if val == "" {
+		return "", end, reply
+	}
+	if !strings.HasPrefix(val, "Tag.") {
+		val = "Tag." + val // 归一为内部规范 key
+	}
+	return val, end, reply
 }
 
 // ChatHandler 持有单个 chatroom 仓库路径，并提供读取 / 发言接口。
@@ -246,15 +285,8 @@ func (h *ChatHandler) parseBlocks() []chatBlock {
 					continue
 				}
 				val := strings.TrimSpace(mline[len(key):])
-				if strings.HasPrefix(val, "End:") {
-					b.End = true
-					val = strings.TrimSpace(val[4:])
-				}
-				if r := regexp.MustCompile(`Re:\s*(No\.\d+)`).FindStringSubmatch(val); r != nil {
-					b.Reply = r[1]
-					val = strings.TrimSpace(val[:strings.Index(val, r[0])])
-				}
-				b.Tag = val
+				tag, end, reply := parseChatSessionVal(val) // 新语法 + 旧写法兼容
+				b.Tag, b.End, b.Reply = tag, end, reply
 			}
 			blocks = append(blocks, b)
 			i = j
@@ -340,41 +372,48 @@ func chatSessionLine(speaker string, blocks []chatBlock, session, reply string, 
 	}
 	if session == "" {
 		if reply != "" {
-			return "", "`Re: No.<n>` 必须与 `- 对话：Tag.<标签>`（或 `- Conversation:`）写在同一行（指明回应哪条时请同时给出会话标签）", ""
+			return "", "回应编号（ReNo.<n>）必须与对话 Tag 同行 —— 写 `- 对话：Tag:<短名> ReNo.<n>`（指明回应哪条时请一并给出 Tag）", ""
 		}
 		return "", "", ""
 	}
+	// 对话字段语法（2026-09-17 用户定）：NewTag:<短名> / Tag:<短名>[ ReNo.<n>] / EndTag:<短名>[ ReNo.<n>]。
+	// 入参一律接受四种写法：新语法、旧写法（End: Tag.<短名>）、带 Tag. 前缀、纯短名 —— 先归一到短名。
 	end := false
-	if strings.HasPrefix(session, "End:") {
-		end = true
+	for _, pfx := range []string{"EndTag:", "End:"} {
+		if strings.HasPrefix(session, pfx) {
+			end = true
+			session = strings.TrimSpace(session[len(pfx):])
+			break
+		}
+	}
+	for _, pfx := range []string{"NewTag:", "Tag:"} {
+		if strings.HasPrefix(session, pfx) {
+			session = strings.TrimSpace(session[len(pfx):])
+			break
+		}
+	}
+	if len(session) > 4 && strings.EqualFold(session[:4], "Tag.") { // 旧写法 Tag.<短名>
 		session = strings.TrimSpace(session[4:])
 	}
-	// 2026-09-17：`Tag.` 前缀在输入侧**可省略**（沟通室 Web 端的 Tag 输入框只填短名，如 `cup-quota-0917`）——
-	// 这里统一补全并规范化（`tag.` 大小写也归一），保证写入 CHAT.md 的始终是规范形式 `Tag.<短名>`。
-	if session != "" {
-		if len(session) > 4 && strings.EqualFold(session[:4], "Tag.") {
-			session = "Tag." + session[4:]
-		} else {
-			session = "Tag." + session
-		}
+	if !chatTagShortRE.MatchString(session) {
+		return "", "对话 Tag 格式：短名（字母/数字/-/_，≤24 字符）—— 新建 NewTag:<短名>，接续 Tag:<短名>[ ReNo.<n>]，结束 EndTag:<短名>；旧写法 Tag.<短名> / End: Tag.<短名> 亦兼容", ""
 	}
-	if !chatTagRE.MatchString(session) {
-		return "", "会话标签格式应为 Tag.<短名>（**`Tag.` 前缀可省略**，只填短名即可；小写字母/数字/-/_，≤24 字符，如 Tag.api-ai-401）；结束会话写 `End: Tag.<短名>`", ""
-	}
+	tag := "Tag." + session  // 内部规范 key（下文校验一律用它）
+	disp := "Tag:" + session // 提示文案里给人看的显示形式
 	known, closed := chatTags(blocks)
 	if end {
-		if !known[session] {
-			return "", fmt.Sprintf("会话 %s 从未出现过，无需 End（如只是想开新会话，请直接用新标签）", session), ""
+		if !known[tag] {
+			return "", fmt.Sprintf("会话 %s 从未出现过，无需 EndTag（如只是想开新会话，请直接用 NewTag:<短名>）", disp), ""
 		}
-		if closed[session] {
-			return "", fmt.Sprintf("会话 %s 已是结束状态，无需重复 End", session), ""
+		if closed[tag] {
+			return "", fmt.Sprintf("会话 %s 已是结束状态，无需重复 EndTag", disp), ""
 		}
-		owner := chatTagOwner(blocks, session)
+		owner := chatTagOwner(blocks, tag)
 		if owner != "" && owner != speaker {
-			return "", fmt.Sprintf("会话 %s 由「%s」发起 —— 规则 8 规定 **End 只能由主题发起人** 使用，请让发起人来结束（或在其确认后代为操作）", session, owner), ""
+			return "", fmt.Sprintf("会话 %s 由「%s」发起 —— 规则 8 规定 **EndTag 只能由主题发起人** 使用，请让发起人来结束（或在其确认后代为操作）", disp, owner), ""
 		}
-	} else if closed[session] {
-		return "", fmt.Sprintf("会话 %s 已结束（`- 对话：End: %s`）——已结束的标签不可再引用，请另起一个新标签（README 核心规则 8）", session, session), ""
+	} else if closed[tag] {
+		return "", fmt.Sprintf("会话 %s 已结束（EndTag）——已结束的 Tag 不可再引用，请另起一个新 Tag（README 核心规则 8）", disp), ""
 	}
 	if chatReplyRE.MatchString(reply) && !chatReplyExists(blocks, reply) {
 		return "", fmt.Sprintf("回应目标 %s 不存在（房间里没有这个编号，先确认一下）", reply), ""
@@ -383,32 +422,29 @@ func chatSessionLine(speaker string, blocks []chatBlock, session, reply string, 
 	if !end {
 		var others []string
 		for t := range known {
-			if !closed[t] && t != session {
-				others = append(others, t)
+			if !closed[t] && t != tag {
+				others = append(others, "Tag:"+strings.TrimPrefix(t, "Tag."))
 			}
 		}
 		if len(others) > 0 {
-			warn = fmt.Sprintf("当前还有未结束的会话 %s —— 约定是「一个主题 End 之前不要开新主题」，建议先 End 它再开新主题（本次已照发）", strings.Join(others, "、"))
+			warn = fmt.Sprintf("当前还有未结束的会话 %s —— 约定是「一个主题 End 之前不要开新主题」，建议先 EndTag 它再开新主题（本次已照发）", strings.Join(others, "、"))
 		}
 	}
-	if en {
-		line := "- Conversation: "
-		if end {
-			line += "End: "
-		}
-		line += session
-		if reply != "" {
-			line += " Re: " + reply
-		}
-		return line, "", warn
-	}
+	// 写入形态（统一语法）：首现 ⇒ NewTag:；End ⇒ EndTag:；其余 ⇒ Tag:；回应 ⇒ 追加 ReNo.<n>
 	line := "- 对话："
-	if end {
-		line += "End: "
+	if en {
+		line = "- Conversation: "
 	}
-	line += session
+	switch {
+	case end:
+		line += "EndTag:" + session
+	case !known[tag]:
+		line += "NewTag:" + session
+	default:
+		line += "Tag:" + session
+	}
 	if reply != "" {
-		line += " Re: " + reply
+		line += " ReNo." + strings.TrimPrefix(reply, "No.")
 	}
 	return line, "", warn
 }

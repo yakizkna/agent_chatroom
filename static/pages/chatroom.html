@@ -183,12 +183,12 @@ var I18N = {
     'hi.sent': '已发言', 'hi.filled': '已填充：%s',
     'hf.onlytag': '只看对话 %s（%s 条）', 'hf.clearing': '取消筛选',
     'hf.archive': '以下为归档 %s —— 更早的发言（CHAT.md 只留最近 100 条）',
-    'tg.label': '对话：', 'tg.end': ' · End', 'tb.fill': '点击自动填充：收件人 / Tag / ReNo', 'tg.click': '点击只看该对话',
+    'tg.label': '对话：', 'tb.fill': '点击自动填充：收件人 / Tag / ReNo', 'tg.click': '点击只看该对话',
     'err.empty': '内容为空，先输入要说的话', 'err.speaker': '请填写发件人', 'err.readfail': '读取失败', 'err.updfail': '刷新失败', 'err.speakfail': '发言失败',
     'err.reqfail': '请求失败：', 'err.openfile': '打开文件失败：',
     'warn.end.needtag': '勾选了「结束该Tag」，请先填对话短名（不用写 Tag. 前缀）',
     'warn.end.notowner': '会话 %s 由「%s」发起 —— 规则规定 End 只能由发起人使用',
-    'warn.end.willwrite': '将写入结束标记 End: %s（此后该标签不可再引用）',
+    'warn.end.willwrite': '将写入结束标记 EndTag:%s（此后该 Tag 不可再引用）',
     'warn.closed': '会话 %s 已结束（End），按规则不可再引用 —— 请另起一个新标签',
     'warn.openothers': '⚠ 还有未结束的会话 %s（约定：一个主题 End 之前不要开新主题）',
     'warn.into': '本次发言归入会话 %s%s',
@@ -213,12 +213,12 @@ var I18N = {
     'hi.sent': 'Posted', 'hi.filled': 'Filled: %s',
     'hf.onlytag': 'Only conversation %s (%s posts)', 'hf.clearing': 'Clear filter',
     'hf.archive': 'Older posts from archive %s (CHAT.md keeps only latest 100)',
-    'tg.label': 'Conversation: ', 'tg.end': ' · End', 'tb.fill': 'Click to autofill: To / Tag / ReNo', 'tg.click': 'Click to view this conversation only',
+    'tg.label': 'Conversation: ', 'tb.fill': 'Click to autofill: To / Tag / ReNo', 'tg.click': 'Click to view this conversation only',
     'err.empty': 'Message is empty', 'err.speaker': 'Please enter the sender', 'err.readfail': 'Read failed', 'err.updfail': 'Refresh failed', 'err.speakfail': 'Post failed',
     'err.reqfail': 'Request failed: ', 'err.openfile': 'Failed to open file: ',
     'warn.end.needtag': 'You checked "End this Tag", please fill in the tag name first (no Tag. prefix)',
     'warn.end.notowner': 'Conversation %s is started by "%s" — only the starter may End it',
-    'warn.end.willwrite': 'Will write End marker: %s (tag can no longer be reused afterward)',
+    'warn.end.willwrite': 'Will write End marker: EndTag:%s (tag can no longer be reused afterward)',
     'warn.closed': 'Conversation %s is ended (End), cannot be reused — start a new tag',
     'warn.openothers': '⚠ There are still open conversations %s (one topic at a time)',
     'warn.into': 'This post goes to conversation %s%s', 'warn.into.re': ' and replies to %s',
@@ -563,11 +563,17 @@ function parseChat(md){
         if (m && (m[1] === '对话' || m[1] === '会话')){ conv = m[2]; }
       }
       if (conv != null){
-        var val = conv.trim();
-        if (/^End:/.test(val)){ b.tagEnd = true; val = val.trim().slice(4).trim(); }
-        var r = /Re:\s*(No\.\d+)/.exec(val);
-        if (r){ b.reply = r[1]; val = val.slice(0, r.index).trim(); }
-        b.tag = val;
+        // 对话字段语法（2026-09-17 统一）：NewTag:<短名> / Tag:<短名>[ ReNo.<n>] / EndTag:<短名>
+        // 旧写法（Tag.<短名> / End: Tag.<短名> / Re: No.<n>）一律兼容；内部规范 key 仍是 Tag.<短名>。
+        var val = conv.trim(), isNew = false;
+        if (/^EndTag:/.test(val)){ b.tagEnd = true; val = val.slice(7).trim(); }
+        else if (/^End:/.test(val)){ b.tagEnd = true; val = val.slice(4).trim(); }
+        if (/^NewTag:/.test(val)){ isNew = true; val = val.slice(7).trim(); }
+        else if (/^Tag:/.test(val)){ val = val.slice(4).trim(); }
+        var r = /(?:ReNo\.|Re:\s*No\.)(\d+)/.exec(val);
+        if (r){ b.reply = 'No.' + r[1]; val = val.slice(0, r.index).trim(); }
+        b.tagNew = isNew;
+        b.tag = val ? (/^Tag\./.test(val) ? val : ('Tag.' + val)) : '';
         return;
       }
       b.metaLines.push(line);                           // 其余元数据**原样保留**（逐行渲染）
@@ -592,7 +598,7 @@ function blockHtml(b){
   h.push('<span class="who">' + esc(b.speaker) + '</span>');
   if (b.tag){
     h.push('<span class="tag' + (b.tagEnd ? ' tag-end' : '') + '" data-tag="' + esc(b.tag) +
-           '" title="' + esc(t('tg.click')) + '">' + t('tg.label') + esc(tagLabel(b.tag)) + (b.tagEnd ? ' · End' : '') + '</span>');
+           '" title="' + esc(t('tg.click')) + '">' + t('tg.label') + esc(tagBadge(b)) + '</span>');
   }
   if (b.reply) h.push('<a class="re" href="#' + anchorOf(b.reply) + '" title="' + esc(b.reply) + '">'
                       + esc(reLabel(b.reply)) + '</a>');
@@ -620,6 +626,16 @@ function renderChat(md, filter, opts){
     out.push('<div class="filterbar">' + t('hf.onlytag','<code>'+esc(tagLabel(filter))+'</code>', n) +
              '<button type="button" id="clearFilter">' + t('hf.clearing') + '</button></div>');
   }
+  // 首现标记：除显式 NewTag: 外，旧写法（Tag.<短名>）的历史条目也把该 Tag 的**最早一条**标为 NewTag
+  var minNo = {};
+  p.blocks.forEach(function(b){
+    if (!b.tag || !b.no) return;
+    var n = parseInt(b.no.slice(3), 10);
+    if (!(b.tag in minNo) || n < minNo[b.tag]) minNo[b.tag] = n;
+  });
+  p.blocks.forEach(function(b){
+    if (b.tag && b.no && parseInt(b.no.slice(3), 10) === minNo[b.tag]) b.tagNew = true;
+  });
   p.blocks.forEach(function(b){
     if (filter && b.tag !== filter) return;
     out.push(blockHtml(b));
@@ -658,8 +674,10 @@ function reNo(v){
 // Tag 输入：**只填短名**（无需 `Tag.` 前缀，如 cup-quota-0917）。
 // bareTag() 归一为短名（顺带吃掉 `End:` 前缀与误输入的 `Tag.`）；fullTag() 补回规范形式 Tag.<短名>。
 function bareTag(v){
-  return String(v == null ? '' : v).trim().replace(/^End:\s*/i, '')
-         .replace(/^#/, '').replace(/^Tag\./i, '').trim();
+  return String(v == null ? '' : v).trim()
+         .replace(/^EndTag:\s*/i, '').replace(/^End:\s*/i, '')
+         .replace(/^NewTag:\s*/i, '').replace(/^Tag[:.]\s*/i, '')
+         .replace(/^#/, '').trim();
 }
 function fullTag(v){ var b = bareTag(v); return b ? ('Tag.' + b) : ''; }
 
@@ -671,12 +689,21 @@ function fullTag(v){ var b = bareTag(v); return b ? ('Tag.' + b) : ''; }
 //   ② 凡是**给人看**的文本，一律套 tagLabel()。
 //   ⇒ 渲染出的 `#` 只在 HTML 文本节点里，CHAT.md 一字不动。
 function tagLabel(v){ var b = bareTag(v); return b ? ('Tag:' + b) : ''; }
+function newTagLabel(v){ var b = bareTag(v); return b ? ('NewTag:' + b) : ''; }
+function endTagLabel(v){ var b = bareTag(v); return b ? ('EndTag:' + b) : ''; }
 
-// 回应编号的**显示**文案：`No.144` → `ReNo:144`（2026-09-17 用户定：与 Tag: 一起读作
-// 「对话：Tag:xxx ReNo:144」，含义更明确。文件里仍是 `Re: No.144`）。
+// 标题行徽标：按该条的状态给出 NewTag/Tag/EndTag（显式 NewTag: 或该 Tag 的最早一条 ⇒ NewTag）
+function tagBadge(b){
+  var s = bareTag(b.tag); if (!s) return '';
+  if (b.tagEnd) return 'EndTag:' + s;
+  return (b.tagNew ? 'NewTag:' : 'Tag:') + s;
+}
+
+// 回应编号的**显示**文案：`No.144` → `ReNo.144`（2026-09-17 用户定，与 No.<n> 同形；
+// 与 Tag: 一起读作「对话：Tag:xxx ReNo.144」）。文件里同样是 `ReNo.<n>`。
 function reLabel(v){
   var m = /(\d+)/.exec(String(v == null ? '' : v));
-  return m ? ('ReNo:' + m[1]) : '';
+  return m ? ('ReNo.' + m[1]) : '';
 }
 
 // 缺省值（规则 8）：主题还在讨论中 ⇒「当前会话 + 回应上一条」；上一个主题已 End ⇒ 留空待填新标签
@@ -734,6 +761,8 @@ function paint(){
 function warnTag(){
   var v = fullTag(session.value);      // 输入框是短名，比较/提示一律用规范形式 Tag.<短名>
   var p = allParsed(), open = openTopic(p);
+  var knownTags = {};                  // 该 Tag 是否已存在 ⇒ 决定提示 NewTag: 还是 Tag:
+  p.blocks.forEach(function(b){ if (b.tag) knownTags[b.tag] = 1; });
   if (endTag.checked){
     if (!v){ setHint(t('warn.end.needtag'), 'err'); return; }
     var owner = tagOwner(p, v);
@@ -741,7 +770,7 @@ function warnTag(){
       setHint(t('warn.end.notowner', tagLabel(v), owner), 'err');
       return;
     }
-    setHint(t('warn.end.willwrite', tagLabel(v)), '');
+    setHint(t('warn.end.willwrite', endTagLabel(v)), '');
     return;
   }
   if (v && closedTags[v]){
@@ -756,7 +785,7 @@ function warnTag(){
   }
   if (v){
     var r = reNo(reply.value);
-    setHint(t('warn.into', tagLabel(v), r ? t('warn.into.re', r) : ''), ''); return;
+    setHint(t('warn.into', knownTags[v] ? tagLabel(v) : newTagLabel(v), r ? t('warn.into.re', r) : ''), ''); return;
   }
   if (open){ setHint(t('warn.noopen.default', tagLabel(open)), 'err'); return; }
   setHint(t('warn.noopen'), '');
@@ -846,7 +875,7 @@ function speak(){
     if(owner && owner !== selfSpeaker()){
       setHint(t('warn.end.notowner', tagLabel(tag), owner),'err'); return;
     }
-    tag = 'End: ' + tag;
+    tag = 'EndTag:' + tag;   // 统一语法（服务端同样接受旧写法 End:）
   } else if(tag && closedTags[tag]){
     setHint(t('warn.closed', tagLabel(tag)),'err'); return;
   }
