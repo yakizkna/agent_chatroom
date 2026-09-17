@@ -523,7 +523,7 @@ function parseChat(md){
     if (inCode || !/^# /.test(lines[i])) continue;
     var nb = [];
     for (k = i + 1; k < lines.length && nb.length < 3; k++){ if (lines[k].trim()) nb.push(lines[k]); }
-    if (nb.some(function(l){ return /^- 时间：/.test(l); })) starts.push(i);
+    if (nb.some(function(l){ return /^- (时间：|Time:)/.test(l); })) starts.push(i);
   }
   var pre = lines.slice(0, starts.length ? starts[0] : lines.length).join('\n');
   var blocks = [];
@@ -537,10 +537,17 @@ function parseChat(md){
     var b = { no: t ? 'No.' + t[2] : '', speaker: t ? t[1] : title.replace(/^#\s+/, ''),
               tag: '', tagEnd: false, reply: '', metaLines: [], body: body };
     meta.forEach(function(line){
-      var m = /^- ([^：]+)：(.*)$/.exec(line);
-      if (m && (m[1] === '对话' || m[1] === '会话')){    // 对话 = 正式名；会话 = 等价兼容写法
-        var val = m[2].trim();                          // 该行由标题徽标表达，不进元数据区
-        if (/^End:/.test(val)){ b.tagEnd = true; val = val.slice(4).trim(); }
+      // 会话元数据行：中文「对话：/会话：」或英文「Conversation:/Session:」
+      var conv = null;
+      var mC = /^- Conversation:\s*(.*)$/.exec(line) || /^- Session:\s*(.*)$/.exec(line);
+      if (mC){ conv = mC[1]; }
+      else {
+        var m = /^- ([^：]+)：(.*)$/.exec(line);
+        if (m && (m[1] === '对话' || m[1] === '会话')){ conv = m[2]; }
+      }
+      if (conv != null){
+        var val = conv.trim();
+        if (/^End:/.test(val)){ b.tagEnd = true; val = val.trim().slice(4).trim(); }
         var r = /Re:\s*(No\.\d+)/.exec(val);
         if (r){ b.reply = r[1]; val = val.slice(0, r.index).trim(); }
         b.tag = val;
@@ -800,7 +807,7 @@ function speak(){
   busy(true); setHint(t('hi.sending'),'spinner');
   apiFetch('/api/chat/speak' + roomQuery(), {method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({content: v, from: from.value.trim(), to: to.value.trim(), subject: subject.value.trim(),
-                              session: tag, reply: reply.value.trim()})})
+                              session: tag, reply: reply.value.trim(), lang: curLang()})})
     .then(r=>r.json()).then(function(j){
       if(j.ok){ msg.value=''; reply.value=''; endTag.checked=false; setHint(t('hi.sent'),'ok'); localStorage.setItem('chat_from', from.value.trim()); load(); }
       else setHint(j.error||t('err.speakfail'),'err');

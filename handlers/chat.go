@@ -30,10 +30,13 @@ const (
 )
 
 var (
-	chatSessionKeys = []string{"- 对话：", "- 会话："} // 正式名「对话：」；「会话：」等价兼容写法
-	chatTagRE       = regexp.MustCompile(`^Tag\.[A-Za-z0-9_-]{1,24}$`)
-	chatReplyRE     = regexp.MustCompile(`^No\.\d+$`)
-	chatNoRE        = regexp.MustCompile(`No\.(\d+)`)
+	// 会话元数据识别 key：中文（正式「对话：」/兼容「会话：」）+ 英文（Conversation:/Session:）
+	chatSessionKeys = []string{"- 对话：", "- 会话：", "- Conversation:", "- Session:"}
+	// 时间锚点（用于识别发言块）：中英 2 种
+	chatTimeKeys = []string{"- 时间：", "- Time:"}
+	chatTagRE    = regexp.MustCompile(`^Tag\.[A-Za-z0-9_-]{1,24}$`)
+	chatReplyRE  = regexp.MustCompile(`^No\.\d+$`)
+	chatNoRE     = regexp.MustCompile(`No\.(\d+)`)
 	// 发言块标题行 `# <发言人> No.<n>` —— 归档按它切块，不依赖 `---` 分隔线
 	chatBlockHeadRE = regexp.MustCompile(`(?m)^# .*No\.(\d+)[ \t]*$`)
 	chatNoTrailRE   = regexp.MustCompile(`\s*No\.\d+\s*$`)
@@ -195,7 +198,7 @@ func (h *ChatHandler) parseBlocks() []chatBlock {
 			if inCode || !strings.HasPrefix(ln, "# ") {
 				continue
 			}
-			// 标题下 1~3 个非空行内须出现 `- 时间：` 才算发言块
+			// 标题下 1~3 个非空行内须出现时间锚点（- 时间：/- Time:）才算发言块
 			head := []string{}
 			for k := i + 1; k < len(lines) && len(head) < 3; k++ {
 				if strings.TrimSpace(lines[k]) != "" {
@@ -204,8 +207,13 @@ func (h *ChatHandler) parseBlocks() []chatBlock {
 			}
 			hasTime := false
 			for _, l := range head {
-				if strings.HasPrefix(l, "- 时间：") {
-					hasTime = true
+				for _, tk := range chatTimeKeys {
+					if strings.HasPrefix(l, tk) {
+						hasTime = true
+						break
+					}
+				}
+				if hasTime {
 					break
 				}
 			}
@@ -320,7 +328,7 @@ func chatDupNo(blocks []chatBlock, no int) bool {
 
 // chatSessionLine 把「对话 / 回应」参数规范成元数据行；校验标签语法、End 权限与「End 后不可再引用」。
 // 返回 (line, err, warn)：line 空且 err 非空＝拒绝；warn 非空＝照发但提示。
-func chatSessionLine(speaker string, blocks []chatBlock, session, reply string) (string, string, string) {
+func chatSessionLine(speaker string, blocks []chatBlock, session, reply string, en bool) (string, string, string) {
 	session = strings.TrimSpace(session)
 	reply = strings.TrimSpace(reply)
 	reply = regexp.MustCompile(`^Re:\s*`).ReplaceAllString(reply, "")
@@ -332,7 +340,7 @@ func chatSessionLine(speaker string, blocks []chatBlock, session, reply string) 
 	}
 	if session == "" {
 		if reply != "" {
-			return "", "`Re: No.<n>` 必须与 `- 对话：Tag.<标签>` 写在同一行（指明回应哪条时请同时给出会话标签）", ""
+			return "", "`Re: No.<n>` 必须与 `- 对话：Tag.<标签>`（或 `- Conversation:`）写在同一行（指明回应哪条时请同时给出会话标签）", ""
 		}
 		return "", "", ""
 	}
@@ -373,6 +381,17 @@ func chatSessionLine(speaker string, blocks []chatBlock, session, reply string) 
 		if len(others) > 0 {
 			warn = fmt.Sprintf("当前还有未结束的会话 %s —— 约定是「一个主题 End 之前不要开新主题」，建议先 End 它再开新主题（本次已照发）", strings.Join(others, "、"))
 		}
+	}
+	if en {
+		line := "- Conversation:"
+		if end {
+			line += " End: "
+		}
+		line += session
+		if reply != "" {
+			line += " Re: " + reply
+		}
+		return line, "", warn
 	}
 	line := "- 对话："
 	if end {
@@ -622,13 +641,25 @@ func truncateRune(s string, n int) string {
 
 // Speak 把输入格式化后插入 CHAT.md 最上方，commit 并 push 到 origin/master。
 // 返回 (ok, contentOrErr, warnings)。
-func (h *ChatHandler) Speak(content, from, to, subject, session, reply string) (bool, string, []string) {
+func (h *ChatHandler) Speak(content, from, to, subject, session, reply, lang string) (bool, string, []string) {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return false, "内容为空", nil
 	}
+	// 元数据标签语言：en（英文）或空/其他（中文）。只本地化标签名，用户填写的值原样保留。
+	en := strings.EqualFold(strings.TrimSpace(lang), "en")
+	lab := func(zh, enS string) string {
+		if en {
+			return enS
+		}
+		return zh
+	}
 	if to = strings.TrimSpace(to); to == "" {
-		to = "所有人"
+		if en {
+			to = "everyone"
+		} else {
+			to = "所有人"
+		}
 	}
 	lines := []string{}
 	for _, l := range strings.Split(content, "\n") {
@@ -640,7 +671,11 @@ func (h *ChatHandler) Speak(content, from, to, subject, session, reply string) (
 		if len(lines) > 0 {
 			subject = truncateRune(lines[0], 40)
 		} else {
-			subject = "发言"
+			if en {
+				subject = "post"
+			} else {
+				subject = "发言"
+			}
 		}
 	}
 
@@ -651,13 +686,15 @@ func (h *ChatHandler) Speak(content, from, to, subject, session, reply string) (
 			return "", 0, "请填写发件人"
 		}
 		blocks := h.parseBlocks() // 只解析一次：解析要扫 CHAT.md + 全部归档，条数上百时开销明显
-		sessionLine, err, warn := chatSessionLine(speaker, blocks, session, reply)
+		sessionLine, err, warn := chatSessionLine(speaker, blocks, session, reply, en)
 		if err != "" {
 			return "", 0, err
 		}
 		no := chatMaxNo(blocks) + 1
 		now := time.Now().UTC().Add(8 * time.Hour).Format("2006-01-02 15:04:05") // 北京时间（UTC+8）
-		meta := []string{"- 时间：" + now, "- 收件人：" + to, "- 主题：" + subject}
+		meta := []string{lab("- 时间：", "- Time:") + now,
+			lab("- 收件人：", "- To:") + to,
+			lab("- 主题：", "- Subject:") + subject}
 		if sessionLine != "" {
 			meta = append(meta, sessionLine)
 		}
@@ -851,7 +888,7 @@ func (cr *ChatRooms) Update(c *gin.Context) {
 // Speak POST /api/chat/speak?room=<id> —— 向所选聊天室发言（写 CHAT.md 并 push）。
 func (cr *ChatRooms) SpeakHTTP(c *gin.Context) {
 	var req struct {
-		Content, From, To, Subject, Session, Reply string
+		Content, From, To, Subject, Session, Reply, Lang string
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "invalid request"})
@@ -864,7 +901,7 @@ func (cr *ChatRooms) SpeakHTTP(c *gin.Context) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	ok, contentOrErr, warns := h.Speak(req.Content, req.From, req.To, req.Subject, req.Session, req.Reply)
+	ok, contentOrErr, warns := h.Speak(req.Content, req.From, req.To, req.Subject, req.Session, req.Reply, req.Lang)
 	if !ok {
 		c.JSON(http.StatusOK, gin.H{"ok": false, "error": contentOrErr})
 		return
