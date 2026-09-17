@@ -55,26 +55,45 @@ fi
 
 # Which files to rotate: read them from the unit (StandardOutput/StandardError)
 # so the config follows the unit if paths change; fall back to the defaults.
+LOG_FILES_RAW=""
 LOG_FILES=""
 for prop in StandardOutput StandardError; do
   val="$(systemctl show -p "$prop" --value "$SERVICE" 2>/dev/null || true)"
   case "$val" in
-    append:*|file:*) LOG_FILES="$LOG_FILES \"${val#*:}\"" ;;   # 引号包住，路径含空格也安全
+    append:*|file:*) LOG_FILES_RAW="$LOG_FILES_RAW ${val#*:}" ;;
   esac
 done
-if [ -z "$LOG_FILES" ]; then
-  LOG_FILES=" \"${LOG_DIR}/agent_chatroom.log\" \"${LOG_DIR}/agent_chatroom-error.log\""
+if [ -z "$LOG_FILES_RAW" ]; then
+  LOG_FILES_RAW=" ${LOG_DIR}/agent_chatroom.log ${LOG_DIR}/agent_chatroom-error.log"
 fi
+# 生成配置时给每个路径加引号（路径含空格也安全）
+for f in $LOG_FILES_RAW; do
+  LOG_FILES="$LOG_FILES \"$f\""
+done
 
-# Rotate as the service user: when the log directory is owned by a non-root user,
-# running logrotate as root reports "parent directory has insecure permissions";
-# `su <user> <group>` avoids that. Resolved from the unit's User=/Group=
-# (LOGROTATE_USER / LOGROTATE_GROUP override). If it cannot be resolved, or the
-# service runs as root, the `su` line is omitted.
-LOGROTATE_USER="${LOGROTATE_USER:-$(systemctl show -p User --value "$SERVICE" 2>/dev/null || true)}"
-LOGROTATE_GROUP="${LOGROTATE_GROUP:-${LOGROTATE_USER:-$(systemctl show -p Group --value "$SERVICE" 2>/dev/null || true)}}"
+# Which user should perform the rotation? Two constraints decide it:
+#   1) copytruncate rewrites the log files -> that user must be able to write them;
+#   2) logrotate refuses when the parent directory is group/other-writable, and
+#      `su` to a safe user is the documented way around that.
+# With `StandardOutput=append:` systemd creates the files as **root**, so the
+# OWNER OF THE LOG FILE wins: a rotation running as a non-root user simply
+# cannot truncate a root-owned file (it fails with a permission error), while
+# rotating as root is always allowed.
+# Resolution order: LOGROTATE_USER override -> log file owner -> unit User=.
+LOG_PROBE=""
+for f in $LOG_FILES_RAW; do
+  if [ -e "$f" ]; then LOG_PROBE="$f"; break; fi
+done
+FILE_OWNER=""
+FILE_GROUP=""
+if [ -n "$LOG_PROBE" ]; then
+  FILE_OWNER="$(stat -c '%U' "$LOG_PROBE" 2>/dev/null || true)"
+  FILE_GROUP="$(stat -c '%G' "$LOG_PROBE" 2>/dev/null || true)"
+fi
+LOGROTATE_USER="${LOGROTATE_USER:-${FILE_OWNER:-$(systemctl show -p User --value "$SERVICE" 2>/dev/null || true)}}"
+LOGROTATE_GROUP="${LOGROTATE_GROUP:-${FILE_GROUP:-$(systemctl show -p Group --value "$SERVICE" 2>/dev/null || true)}}"
 SU_LINE=""
-if [ -n "$LOGROTATE_USER" ] && [ "$LOGROTATE_USER" != "root" ]; then
+if [ -n "$LOGROTATE_USER" ]; then
   SU_LINE="    su ${LOGROTATE_USER} ${LOGROTATE_GROUP:-$LOGROTATE_USER}"
 fi
 
@@ -97,10 +116,12 @@ echo "[logrotate] wrote ${DEST}"
 echo "  log files :${LOG_FILES}"
 echo "  rule      : daily, keep last 5, compress archives"
 if [ -n "$SU_LINE" ]; then
-  echo "  as user   : ${LOGROTATE_USER}:${LOGROTATE_GROUP:-$LOGROTATE_USER} (owner of the log dir)"
+  echo "  as user   : ${LOGROTATE_USER}:${LOGROTATE_GROUP:-$LOGROTATE_USER} (owner of the log files)"
 else
-  echo "  as user   : (not set - log dir is expected to be root-owned)"
+  echo "  as user   : (not set - logrotate runs as root)"
 fi
+echo "  note      : keep this user able to write the log files, otherwise"
+echo "              copytruncate fails (systemd append: files are usually root-owned)"
 echo
 echo "Dry run (no rotation):    logrotate -d ${DEST}"
 echo "Rotate now:               logrotate -f ${DEST}"
