@@ -401,6 +401,20 @@ function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
 // 行内标记 → HTML。步骤：① 抽出代码跨度（占位符）② 整体转义并套用行内规则 ③ 占位符还原为 <code>
 // 代码跨度按「反引号连续个数精确配对」处理 —— 这样 `` `#44` `` 这类「用双反引号包住单个反引号」
 // 的写法不会错配（2026-09-15 实测：简单正则 /`([^`]+)`/ 会把本房间的 `` `#44` `` 配成半个标签）。
+// 裸 URL / <URL> 自动成链（2026-09-17 用户要求：让发言里的链接可跳转）。
+// 只处理**纯文本里的 URL**：已是 <a> 的片段原样放行（避免二次包裹）；代码跨度不受影响
+// （inline() 里先抽代码为占位符，此时尚未还原）。
+function linkify(html){
+  return html.replace(/(<a\b[^>]*>[\s\S]*?<\/a>)|(?:&lt;|<)(https?:\/\/[^>&\s]+)(?:&gt;|>)|([\s(（，、；：]|^)(https?:\/\/[^\s<>"'）)，、；：！？。…」』】]+)/g,
+    function(m, a, ang, pre, bare){
+      if (a) return a;                                   // 已是链接：别动
+      if (ang) return '<a href="' + ang + '" target="_blank" rel="noopener">' + ang + '</a>';
+      var tail = '', u = bare, t = /[.,;:!?]+$/.exec(u);
+      if (t){ tail = t[0]; u = u.slice(0, -tail.length); }  // 句末标点不并入 URL
+      return pre + '<a href="' + u + '" target="_blank" rel="noopener">' + u + '</a>' + tail;
+    });
+}
+
 function inline(s){
   s = String(s);
   var codes = [], work = '', i = 0;
@@ -438,6 +452,7 @@ function inline(s){
     })
     .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
     .replace(/~~([\s\S]+?)~~/g, '<del>$1</del>');
+  out = linkify(out);                       // 裸 URL / <URL> → 可点链接
   return out.replace(/\u0000(\d+)\u0000/g, function(_, k){
     return '<code>' + esc(codes[+k]) + '</code>';
   });
@@ -445,7 +460,8 @@ function inline(s){
 function setHint(t, cls){ hint.textContent=t; hint.className='hint '+(cls||''); }
 function busy(on){ speakBtn.disabled=on; updateBtn.disabled=on; }
 
-// CHAT.md → HTML（自包含迷你 Markdown：标题 / 表格 / 列表 / 引用 / 代码块 / 分隔线 + 行内标记）
+// CHAT.md → HTML（自包含迷你 Markdown：标题 / 表格 / 列表 / 引用 / 代码块 / 分隔线 + 行内标记）。
+// 链接：`[文本](url)`、`<url>`、裸 `https://…` 都会渲染成可点链接（后两者由 linkify() 处理）。
 // 为什么不用 CDN 的 marked.js：聊天室是全自包含静态页（无外链依赖）。
 function render(md){
   var lines = String(md).replace(/\r\n?/g, '\n').split('\n');
