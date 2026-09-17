@@ -1,6 +1,10 @@
 package handlers
 
-import "testing"
+import (
+	"regexp"
+	"strings"
+	"testing"
+)
 
 // 对话字段语法（2026-09-17 用户定，统一到解析 / 存储 / 显示）：
 //
@@ -97,5 +101,77 @@ func TestChatSessionLineStillValidates(t *testing.T) {
 	}
 	if _, errMsg, _ := chatSessionLine("棒Buddy", b, "old-topic", "11", false, false); errMsg == "" {
 		t.Errorf("向已结束的 Tag 发言应被拒")
+	}
+}
+
+// 块间分隔线固定为 chatSepLines（=2）条（2026-09-18 用户定）。
+// 历史成因：每次发言各留一条、从不合并 ⇒ 累积成 0~9 条 ⇒ 页面虚线数量飘忽。
+// 注意「块正文里的分隔线（不是块尾填充）必须原样保留」，否则会毁掉发言内容。
+func TestNormalizeChatSeps(t *testing.T) {
+	messy := strings.Join([]string{
+		"",
+		"# A No.2",
+		"",
+		"- 时间：2026-09-18 00:00:00",
+		"",
+		"正文里有一条真的分隔线（须保留）：",
+		"",
+		"---",
+		"",
+		"尾行",
+		"",
+		"---",
+		"",
+		"---",
+		"",
+		"---",
+		"",
+		"# B No.1",
+		"",
+		"- 时间：2026-09-17 23:00:00",
+		"",
+		"只有一条分隔线",
+		"",
+		"---",
+		"",
+		"",
+	}, "\n")
+	want := strings.Join([]string{
+		"# A No.2",
+		"",
+		"- 时间：2026-09-18 00:00:00",
+		"",
+		"正文里有一条真的分隔线（须保留）：",
+		"",
+		"---",
+		"",
+		"尾行",
+		"",
+		"---",
+		"",
+		"---",
+		"",
+		"# B No.1",
+		"",
+		"- 时间：2026-09-17 23:00:00",
+		"",
+		"只有一条分隔线",
+		"", // 最后一块之后同样固定 2 条（「每次发言后」含最后一条）
+		"---",
+		"",
+		"---",
+	}, "\n")
+	got := normalizeChatSeps(messy)
+	if got != want {
+		t.Errorf("整理结果不符：\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+	if again := normalizeChatSeps(got); again != got {
+		t.Errorf("整理应幂等，二次结果变了：\n%s", again)
+	}
+	if regexp.MustCompile(`---\n\n---\n\n---`).MatchString(got) {
+		t.Errorf("仍存在 3 条以上连续分隔线：\n%s", got)
+	}
+	if n := len(chatBlockHeadRE.FindAllString(got, -1)); n != 2 {
+		t.Errorf("块数应保持 2，实际 %d", n)
 	}
 }

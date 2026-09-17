@@ -45,6 +45,16 @@ var (
 	chatNoTrailRE   = regexp.MustCompile(`\s*No\.\d+\s*$`)
 )
 
+// chatSepLines：每条发言**之后**的 `---` 分隔线条数（**用户 2026-09-18 定：固定 2 条**）。
+// 为什么是 2（而不是 1）：渲染侧（`static/pages/chatroom.html` 的 `parseChat`）会剥掉块尾
+// **一条**分隔线 —— 所以 2 条 ⇒ 页面上正好 1 条虚线分隔。历史成因：每次发言各留一条、
+// 从不合并 ⇒ 累积成 0~9 条 ⇒ 页面虚线数量飘忽（用户报「分隔线没有固定规则」）。
+// 注意「每条之后」含**最后一条**（文件末尾同样收尾 2 条）⇒ 主文件末条与归档首条之间也有稳定分隔。
+const chatSepLines = 2
+
+// chatSepRE 匹配「整行只有 3 个以上 - / * / _」的 Markdown 分隔线（`<hr>`）。
+var chatSepRE = regexp.MustCompile(`^\s*(?:-{3,}|\*{3,}|_{3,})\s*$`)
+
 type chatBlock struct {
 	No      string // "No.57"
 	Tag     string
@@ -475,34 +485,29 @@ func (h *ChatHandler) resetToOrigin() bool {
 	return true
 }
 
-// writeBlock 把发言块插到 CHAT.md 最上方。
-// 定位方式：以「当前标号最大的一块」为锚（新发言的 No 正是最大 +1），插到该块之前；
-// 找不到任何块头（空文件等）时退回追加到末尾。
-// 这样不依赖文件开头的空行/分隔线格式（曾因整理时去掉前导空行，`\n---\n` 首个匹配
-// 落到第一块之后，新块被插成第二位置 ⇒ 置顶失效）。
+// writeBlock 把发言块插到 CHAT.md 最上方，并把块间分隔线整理成固定条数（chatSepLines）。
+// 定位方式：以「当前标号最大的一块」为锚（新发言的 No 正是最大 +1），插到该块**块头行之前**；
+// 找不到块头（空文件等）时插到文件开头。直接按块头行偏移插入、不依赖前导分隔线格式
+// （历史坑：曾用「最后一个 `\n---\n`」定位，整理掉前导空行后新块被插成第二位置 ⇒ 置顶失效）。
 func (h *ChatHandler) writeBlock(block string) (bool, string) {
 	cur, err := os.ReadFile(h.file)
 	if err != nil {
 		return false, "读取 CHAT.md 失败：" + err.Error()
 	}
 	content := string(cur)
-	idx := h.anchorTopInsertPos(content)
-	var newContent string
-	if idx >= 0 {
-		newContent = content[:idx] + block + "\n" + strings.TrimLeft(content[idx:], "\n")
-	} else {
-		newContent = content + block
+	pos := h.topBlockHeadPos(content)
+	if pos < 0 {
+		pos = 0 // 空文件 / 无块头：插到文件开头
 	}
+	newContent := normalizeChatSeps(content[:pos]+block+"\n"+strings.TrimLeft(content[pos:], "\n")) + "\n"
 	if err := os.WriteFile(h.file, []byte(newContent), 0644); err != nil {
 		return false, "写入 CHAT.md 失败：" + err.Error()
 	}
 	return true, ""
 }
 
-// anchorTopInsertPos 返回「标号最大那一块」的开头分隔线 `\n---\n` 的位置（插到它之前即置顶），
-// 与历史 writeBlock 的拼接口径一致（idx 指向分隔线前的换行）。
-// 最大块在文件最顶且前导无换行时返回 0（插到文件开头）；找不到块头返回 -1。
-func (h *ChatHandler) anchorTopInsertPos(content string) int {
+// topBlockHeadPos 返回「标号最大那一块」的块头行行首偏移（插到它之前即置顶）；找不到块头返回 -1。
+func (h *ChatHandler) topBlockHeadPos(content string) int {
 	pos := -1
 	maxN := -1
 	for _, m := range chatBlockHeadRE.FindAllStringSubmatchIndex(content, -1) {
@@ -512,13 +517,70 @@ func (h *ChatHandler) anchorTopInsertPos(content string) int {
 			pos = m[0] // 块头行行首偏移
 		}
 	}
-	if pos < 0 {
-		return -1
+	return pos
+}
+
+// chatSepTail 返回「块尾 → 下一块头」之间的规范填充（末尾不带换行；调用方按需补）。
+// 即 `\n\n` + (chatSepLines-1) 条「--- + 空行」 + 最后一条 `---` ⇒ 恰好 chatSepLines 条分隔线。
+func chatSepTail() string {
+	return "\n\n" + strings.Repeat("---\n\n", chatSepLines-1) + "---"
+}
+
+// stripSepTrail 去掉末尾连续的「分隔线 / 空行」（块尾与下一块头之间的填充）。
+func stripSepTrail(lines []string) []string {
+	i := len(lines)
+	for i > 0 {
+		if t := strings.TrimSpace(lines[i-1]); t == "" || chatSepRE.MatchString(lines[i-1]) {
+			i--
+			continue
+		}
+		break
 	}
-	if idx := strings.LastIndex(content[:pos], "\n---\n"); idx >= 0 {
-		return idx
+	return lines[:i]
+}
+
+// stripSepAll 去掉所有整行分隔线（用于块头之前的前导区：那里只可能是历史累积的残留）。
+func stripSepAll(lines []string) []string {
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		if chatSepRE.MatchString(l) {
+			continue
+		}
+		out = append(out, l)
 	}
-	return 0
+	return out
+}
+
+// normalizeChatSeps 把 CHAT.md / 归档整理成「块间固定 chatSepLines 条 `---`」：
+//   - 按块头 `# … No.<n>` 切块，**块正文逐字保留**，只去掉块尾多余的「分隔线 / 空行」；
+//   - 每块之后重新拼上固定条数的分隔线（**含最后一块**）⇒ 不再出现「每次发言各留一条、越积越多」；
+//   - 块头之前的前导区（通常是仓库标题）保留，但其中残留的分隔线全部丢掉。
+//
+// 返回值不带结尾换行（调用方自行补 `\n`）。
+func normalizeChatSeps(s string) string {
+	s = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(s)
+	locs := chatBlockHeadRE.FindAllStringIndex(s, -1)
+	if len(locs) == 0 {
+		return strings.TrimSpace(strings.Join(stripSepAll(strings.Split(s, "\n")), "\n"))
+	}
+	parts := make([]string, 0, len(locs)+1)
+	if pre := strings.TrimSpace(strings.Join(stripSepAll(strings.Split(s[:locs[0][0]], "\n")), "\n")); pre != "" {
+		parts = append(parts, pre) // 前导区（仓库标题等）与第一个块之间同样用固定分隔线
+	}
+	for i, l := range locs {
+		end := len(s)
+		if i+1 < len(locs) {
+			end = locs[i+1][0]
+		}
+		body := strings.TrimSpace(strings.Join(stripSepTrail(strings.Split(s[l[0]:end], "\n")), "\n"))
+		if body == "" {
+			continue
+		}
+		parts = append(parts, body)
+	}
+	// 每块之后固定 chatSepLines 条（含最后一块）⇒ 与「每次发言后固定 N 条」字面一致，
+	// 也让「主文件末条 ↔ 归档首条」之间不会出现 0 条分隔线。
+	return strings.Join(parts, chatSepTail()+"\n\n") + chatSepTail()
 }
 
 // renumberTop 把写在最上方的那一块改号（撞号时用，只改自己那一块，不动他人内容）。
@@ -614,7 +676,8 @@ func (h *ChatHandler) archiveOverflow() ([]string, string) {
 		for _, b := range bodies { // bodies 已为「新→旧」，正序写出即顶部最新
 			sb.WriteString(chatBlockFromPart(b))
 		}
-		if err := os.WriteFile(path, []byte(sb.String()+existing), 0644); err != nil {
+		// 归档同样按固定条数整理（否则搬进来的块会带着新的分隔线累积形态）
+		if err := os.WriteFile(path, []byte(normalizeChatSeps(sb.String()+existing)+"\n"), 0644); err != nil {
 			return touched, "写入归档失败：" + err.Error()
 		}
 		touched = append(touched, fname)
@@ -628,7 +691,7 @@ func (h *ChatHandler) archiveOverflow() ([]string, string) {
 	for _, b := range stay {
 		sb.WriteString(chatBlockFromPart(b))
 	}
-	if err := os.WriteFile(h.file, []byte(sb.String()), 0644); err != nil {
+	if err := os.WriteFile(h.file, []byte(normalizeChatSeps(sb.String())+"\n"), 0644); err != nil {
 		return touched, "回写 CHAT.md 失败：" + err.Error()
 	}
 	return touched, ""
