@@ -616,7 +616,7 @@ function renderChat(md, filter, opts){
   if (filter && !opts.noFilterBar){
     var n = (typeof opts.filterCount === 'number') ? opts.filterCount
             : p.blocks.filter(function(b){ return b.tag === filter; }).length;
-    out.push('<div class="filterbar">' + t('hf.onlytag','<code>'+esc(filter)+'</code>', n) +
+    out.push('<div class="filterbar">' + t('hf.onlytag','<code>'+esc(tagLabel(filter))+'</code>', n) +
              '<button type="button" id="clearFilter">' + t('hf.clearing') + '</button></div>');
   }
   p.blocks.forEach(function(b){
@@ -662,8 +662,13 @@ function bareTag(v){
 }
 function fullTag(v){ var b = bareTag(v); return b ? ('Tag.' + b) : ''; }
 
-// 标题行 Tag 徽标的**显示**文案：`Tag.<短名>` → `#<短名>`（2026-09-17 用户定，更短更直观）。
-// ⚠️ 纯显示层：`data-tag` 属性仍保存规范形式 `Tag.<短名>`（筛选 / 自动填充用），CHAT.md 一字不动。
+// Tag 的**显示**文案：`Tag.<短名>` → `#<短名>`（2026-09-17 用户定，更短更直观；2026-09-17 统一到
+// 全部显示位置：标题徽标 / 筛选条 / 各类提示文案）。
+// ⚠️ 纯显示层，两条铁律：
+//   ① 凡是**比较 / 存储 / 提交**（closedTags 判定、tagOwner、filterTag、data-tag、提交给服务端）
+//      一律用规范形式 `Tag.<短名>`；
+//   ② 凡是**给人看**的文本，一律套 tagLabel()。
+//   ⇒ 渲染出的 `#` 只在 HTML 文本节点里，CHAT.md 一字不动。
 function tagLabel(v){ var b = bareTag(v); return b ? ('#' + b) : ''; }
 
 // 缺省值（规则 8）：主题还在讨论中 ⇒「当前会话 + 回应上一条」；上一个主题已 End ⇒ 留空待填新标签
@@ -725,27 +730,27 @@ function warnTag(){
     if (!v){ setHint(t('warn.end.needtag'), 'err'); return; }
     var owner = tagOwner(p, v);
     if (owner && owner !== selfSpeaker()){
-      setHint(t('warn.end.notowner', v, owner), 'err');
+      setHint(t('warn.end.notowner', tagLabel(v), owner), 'err');
       return;
     }
-    setHint(t('warn.end.willwrite', v), '');
+    setHint(t('warn.end.willwrite', tagLabel(v)), '');
     return;
   }
   if (v && closedTags[v]){
-    setHint(t('warn.closed', v), 'err'); return;
+    setHint(t('warn.closed', tagLabel(v)), 'err'); return;
   }
   var others = [];
   p.blocks.forEach(function(b){
     if (b.tag && !closedTags[b.tag] && b.tag !== v && others.indexOf(b.tag) < 0) others.push(b.tag);
   });
   if (v && others.length){
-    setHint(t('warn.openothers', others.join(t('sep.list'))), 'err'); return;
+    setHint(t('warn.openothers', others.map(tagLabel).join(t('sep.list'))), 'err'); return;
   }
   if (v){
     var r = reNo(reply.value);
-    setHint(t('warn.into', v, r ? t('warn.into.re', r) : ''), ''); return;
+    setHint(t('warn.into', tagLabel(v), r ? t('warn.into.re', r) : ''), ''); return;
   }
-  if (open){ setHint(t('warn.noopen.default', open), 'err'); return; }
+  if (open){ setHint(t('warn.noopen.default', tagLabel(open)), 'err'); return; }
   setHint(t('warn.noopen'), '');
 }
 
@@ -780,7 +785,7 @@ box.addEventListener('click', function(e){
       session.value = bareTag(st);
       var sn = (bt.getAttribute('data-no') || '').replace(/^No\./, '');
       if (sn) reply.value = sn;
-      note += (sn ? t('fld.fillreply', 'No.' + sn) : '') + t('fld.fillconvo', st);
+      note += (sn ? t('fld.fillreply', 'No.' + sn) : '') + t('fld.fillconvo', tagLabel(st));
     }
     lastAutoTo = to.value; lastAutoReply = reply.value; lastAutoTag = session.value;
     setHint(t('hi.filled', note || t('fld.none')), 'ok');
@@ -831,11 +836,11 @@ function speak(){
     if(!tag){ setHint(t('warn.end.needtag'),'err'); return; }
     var owner = tagOwner(p, tag);
     if(owner && owner !== selfSpeaker()){
-      setHint(t('warn.end.notowner', tag, owner),'err'); return;
+      setHint(t('warn.end.notowner', tagLabel(tag), owner),'err'); return;
     }
     tag = 'End: ' + tag;
   } else if(tag && closedTags[tag]){
-    setHint(t('warn.closed', tag),'err'); return;
+    setHint(t('warn.closed', tagLabel(tag)),'err'); return;
   }
   busy(true); setHint(t('hi.sending'),'spinner');
   apiFetch('/api/chat/speak' + roomQuery(), {method:'POST', headers:{'Content-Type':'application/json'},
