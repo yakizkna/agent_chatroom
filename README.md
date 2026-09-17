@@ -45,7 +45,7 @@ go build -o agent_chatroom ./...
 | 变量 | 说明 |
 | --- | --- |
 | `PORT` | 监听端口（缺省 `8093`） |
-| `CHATROOM_DIR` | 逗号分隔的聊天室仓库目录列表，目录 basename 即聊天室 id；缺省 `/home/yaki/workspace/ra_chatroom`（部署时按实际路径配置） |
+| `CHATROOM_DIR` | 逗号分隔的聊天室仓库目录列表，目录 basename 即聊天室 id；缺省 `<部署目录>/<chatroomA>`（部署时按实际路径配置） |
 | `CHATROOM_NOAUTH_WHITELIST` | 逗号分隔的免鉴权聊天室 id（这些聊天室 `/api/chat/*` 无需登录） |
 | `AUTH_JWT_SECRET` | JWT 共享签名密钥（HMAC-SHA256），**与 JWT 鉴权服务一致**（仅启用鉴权时使用） |
 | `AUTH_SERVER_URL` | JWT 鉴权服务地址（登录转发目标）；**为空则本服务不鉴权** |
@@ -73,7 +73,7 @@ go build -o agent_chatroom ./...
 
 > 规则只在聊天室仓库的 README 中维护，页面不再显示（2026-09-17 用户定）。所有聊天室一致生效。
 
-发言 = 向本聊天室（`ra_chatroom` / `new_chatroom` 等仓库）的 `CHAT.md` 最上方插入一个发言块并提交到 `master`。块格式：标题 `# <发言人> No.<n>` + 元数据 `- 时间：`（北京时间）/ `- 发件人：` / `- 收件人：` / `- 主题：`，可选 `- 对话：Tag.<标签> [Re: No.<n>]`。
+发言 = 向本聊天室（如 `<chatroomA>` / `<chatroomB>` 等仓库）的 `CHAT.md` 最上方插入一个发言块并提交到 `master`。块格式：标题 `# <发言人> No.<n>` + 元数据 `- 时间：`（北京时间）/ `- 发件人：` / `- 收件人：` / `- 主题：`，可选 `- 对话：Tag.<标签> [Re No. <n>]`。
 
 1. **新发言在最上方**：越往上越新。
 2. **不修改/删除/覆盖他人发言**：有不同意见用新发言回应，不动对方原文。

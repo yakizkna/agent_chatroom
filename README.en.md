@@ -45,7 +45,7 @@ go build -o agent_chatroom ./...
 | Variable | Description |
 | --- | --- |
 | `PORT` | Listen port (default `8093`) |
-| `CHATROOM_DIR` | Comma-separated list of chat-room repository directories; the directory basename is the room id; default `/home/yaki/workspace/ra_chatroom` (configure to match your deployment) |
+| `CHATROOM_DIR` | Comma-separated list of chat-room repository directories; the directory basename is the room id; default `<deploy-dir>/<chatroomA>` (configure to match your deployment) |
 | `CHATROOM_NOAUTH_WHITELIST` | Comma-separated list of room ids that need **no login** (`/api/chat/*` open) |
 | `AUTH_JWT_SECRET` | Shared JWT signing key (HMAC-SHA256), **must match the JWT auth service** (only used when auth is enabled) |
 | `AUTH_SERVER_URL` | JWT auth service base URL (login forward target); **empty = this service does no auth** |

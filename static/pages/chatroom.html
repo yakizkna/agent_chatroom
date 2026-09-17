@@ -74,7 +74,7 @@
                        text-align:left; vertical-align:top; }
   .chat th { background:#1b2029; color:var(--ink); font-weight:600; white-space:nowrap; }
   .chat tbody tr:nth-child(even) { background:#12151c; }
-  /* 发言块结构（标题徽标 / 元数据条 / 会话分隔带）—— 规则见 ra_chatroom/README.md 核心规则 8 */
+  /* 发言块结构（标题徽标 / 元数据条 / 会话分隔带）—— 规则见聊天室仓库 README 核心规则 8 */
   .chat .filehead { color:var(--soft); font-size:12.5px; border-bottom:1px dashed var(--line);
                     padding-bottom:10px; margin-bottom:6px; }
   .chat .filehead h2 { font-size:14px; border:0; padding:0; color:var(--soft); margin:0 0 6px; }
@@ -415,9 +415,9 @@ function inline(s){
       } else {
         // 站内文件（相对路径或 file://）→ 走本服务代理路由（fileHref，仓库内相对路径；仓库私有也能访问）
         var p = u.replace(/^file:\/\//i, '');
-        var idx = p.indexOf('ra_chatroom/');
-        if (idx >= 0) p = p.slice(idx + 'ra_chatroom/'.length);     // 绝对 file:// 路径：取仓库内相对路径
-        // 相对路径（不含 ra_chatroom/ 标记）保持原样，即为「仓库根起的相对路径」，不可截断为文件名
+        var mark = currentRoom ? (currentRoom + '/') : '';
+        if (mark && p.indexOf(mark) >= 0) p = p.slice(p.indexOf(mark) + mark.length);   // 绝对 file:// 路径：取仓库内相对路径
+        // 其余（不含当前仓库名标记）保持原样，即为「仓库根起的相对路径」，不可截断为文件名
         href = fileHref(p);
       }
       return '<a href="' + href + '" target="_blank" rel="noopener">' + t + '</a>';
@@ -529,7 +529,7 @@ var closedTags = {};   // 已结束（End）的标签 —— 按规则不可再�
 var lastAutoTag = '', lastAutoReply = '', lastAutoTo = '';   // 上次自动回填的缺省值（避免覆盖用户手输）
 function selfSpeaker(){ return from.value.trim(); }   // 当前发言人 = 填写的「发件人」（必填，无缺省）
 
-// ---- 发言块与会话字段解析（规则见 ra_chatroom/README.md 核心规则 8）----
+// ---- 发言块与会话字段解析（规则见聊天室仓库 README 核心规则 8）----
 // 发言块判定：`^# ` 行且其下 1~3 个非空行内出现 `- 时间：`（代码围栏内不算）。
 // 字段只在**块头元数据区**取（标题行之后、首个空行之前的 `- x：` 行）——正文里的同名文本不算。
 function parseChat(md){

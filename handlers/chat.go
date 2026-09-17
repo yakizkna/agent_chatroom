@@ -16,8 +16,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ---- 客户端 AI 共享沟通室（ra_chatroom/CHAT.md）----
-// 逻辑从 ra_deploy/ops_console/server.py 的 chat_* 移植而来，规则见 ra_chatroom/README.md。
+// ---- 客户端 AI 共享沟通室（聊天室仓库的 CHAT.md）----
+// 逻辑从 ra_deploy/ops_console/server.py 的 chat_* 移植而来，规则见聊天室仓库 README。
 // 关键点：发言前先 pull --rebase 同步主干；全程不使用 push --force（避免覆盖他人发言）；
 // 并发撞号时把「自己那一块」的编号顺延为当前最大 +1 后重推。
 
@@ -53,7 +53,7 @@ type chatBlock struct {
 // ChatHandler 持有单个 chatroom 仓库路径，并提供读取 / 发言接口。
 // 所有会改动工作区或远端的 git 操作都经 mu 串行化，避免并发 rebase/push 互相踩踏。
 type ChatHandler struct {
-	room string // 聊天室标识 = 仓库目录 basename（如 ra_chatroom / new_chatroom）
+	room string // 聊天室标识 = 仓库目录 basename（如 <chatroomA> / <chatroomB>）
 	dir  string // 仓库根目录
 	file string // CHAT.md 绝对路径
 	mu   sync.Mutex
@@ -69,7 +69,7 @@ type ChatRooms struct {
 func NewChatRooms() *ChatRooms {
 	raw := strings.TrimSpace(os.Getenv("CHATROOM_DIR"))
 	if raw == "" {
-		raw = "/home/yaki/workspace/ra_chatroom"
+		raw = "/absolute/path/to/<chatroomA>" // 运行时默认：部署时按实际路径配置
 	}
 	cr := &ChatRooms{rooms: map[string]*ChatHandler{}}
 	for _, part := range strings.Split(raw, ",") {
@@ -101,7 +101,7 @@ func (cr *ChatRooms) resolve(room string) *ChatHandler {
 }
 
 // noAuthWhitelist 解析「免鉴权聊天室白名单」：CHATROOM_NOAUTH_WHITELIST 为逗号分隔的聊天室 id，
-// 如 `new_chatroom,foo`。这些聊天室的 /api/chat/* 无需 JWT 登录即可读取/发言。
+// 如 `<chatroomA>`, `<chatroomB>`。这些聊天室的 /api/chat/* 无需 JWT 登录即可读取/发言。
 func (cr *ChatRooms) noAuthWhitelist() map[string]bool {
 	out := map[string]bool{}
 	for _, part := range strings.Split(os.Getenv("CHATROOM_NOAUTH_WHITELIST"), ",") {
@@ -137,7 +137,7 @@ func (cr *ChatRooms) roomList() []gin.H {
 	return out
 }
 
-// git 在 ra_chatroom 仓库执行 git 命令，返回 (returncode, 合并后的输出)。
+// git 在当前聊天室仓库执行 git 命令，返回 (returncode, 合并后的输出)。
 // 所有调用都强制带上作者身份：机器上没配 git 身份也能 commit / rebase。
 func (h *ChatHandler) git(args ...string) (int, string) {
 	full := make([]string, 0, len(args)+6)
@@ -505,7 +505,7 @@ func chatBlockFromPart(part string) string {
 }
 
 // archiveOverflow 把 CHAT.md 中超出最近 100 条的发言块归档到 CHAT_ARCHIVE_<k>.md。
-// 约定见 ra_chatroom/README.md「归档」一节：主文件只留最近 100 条；超出部分从最旧起搬走，
+// 约定见聊天室仓库 README「归档」一节：主文件只留最近 100 条；超出部分从最旧起搬走，
 // 归档 _<k> 收纳 No.(100k-99)…No.(100k)；归档内保持「新→旧」（顶部最新），块内容原样保留。
 // 返回本次改动到的归档文件相对名（供调用方一并 git add）；出错时第二个返回值非空。
 func (h *ChatHandler) archiveOverflow() ([]string, string) {
@@ -593,7 +593,7 @@ func (h *ChatHandler) readChat() (string, string) {
 }
 
 // latestArchive 返回 `CHAT_ARCHIVE_<k>.md` 中 k 最大的一份（= 最新归档；没有则空串）。
-// 归档编号越大越新（见 ra_chatroom/README.md「归档」）⇒ 最大 k 正是「紧接 CHAT.md 之后的那一页」。
+// 归档编号越大越新（见聊天室仓库 README「归档」）⇒ 最大 k 正是「紧接 CHAT.md 之后的那一页」。
 func (h *ChatHandler) latestArchive() string {
 	entries, err := os.ReadDir(h.dir)
 	if err != nil {
@@ -710,7 +710,7 @@ func (h *ChatHandler) Speak(content, from, to, subject, session, reply, lang str
 	if rc, out := h.git("status", "--porcelain"); rc != 0 {
 		return false, "git status 失败：" + out, nil
 	} else if strings.TrimSpace(out) != "" {
-		return false, "ra_chatroom 工作区有未提交改动，拒绝发言（请先提交或还原，避免与其它改动混淆）：\n" + out, nil
+		return false, "聊天室工作区有未提交改动，拒绝发言（请先提交或还原，避免与其它改动混淆）：\n" + out, nil
 	}
 	// ①b 本地不能领先 origin/master：否则冲突后 reset 会丢未推送提交
 	if rc, out := h.git("fetch", "origin", "master"); rc != 0 {
@@ -719,7 +719,7 @@ func (h *ChatHandler) Speak(content, from, to, subject, session, reply, lang str
 	if rc, ahead := h.git("rev-list", "--count", "origin/master..HEAD"); rc != 0 {
 		return false, "git rev-list 失败：" + ahead, nil
 	} else if strings.TrimSpace(ahead) != "" && strings.TrimSpace(ahead) != "0" {
-		return false, fmt.Sprintf("ra_chatroom 本地有 %s 个未推送提交，拒绝发言（以免后续同步时被 reset 丢弃）：请先自行 push 或还原后再发", strings.TrimSpace(ahead)), nil
+		return false, fmt.Sprintf("聊天室本地有 %s 个未推送提交，拒绝发言（以免后续同步时被 reset 丢弃）：请先自行 push 或还原后再发", strings.TrimSpace(ahead)), nil
 	}
 
 	// 本次发言一旦改动过工作区（writeBlock / 归档之后），其后任何一步失败都必须回滚：
