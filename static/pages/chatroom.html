@@ -175,7 +175,7 @@ var I18N = {
     'logout': '登出', 'lang.switch': 'EN', 'room.sel': '切换聊天室',
     'fld.from': '发件人', 'fld.to': '收件人', 'fld.subject': '主题', 'fld.end': '结束该Tag', 'fld.reply': '回复No.',
     'speak': '发言', 'update': '刷新', 'loading': '加载中…',
-    'ph.from': '发件人自定义', 'ph.to': '所有人', 'ph.subject': '留空取正文首行', 'ph.session': '可选，只填短名，如 cup-quota-0917（不用写 Tag. 前缀）',
+    'ph.from': '发件人自定义', 'ph.to': '所有人', 'ph.subject': '留空取正文首行', 'ph.session': '可选，只填短名，如 cup-quota-0917（不用写 Tag. / Tag: 前缀）',
     'ph.reply': '编号', 'ph.msg': '输入要说的话，Ctrl/⌘+回车 发送…',
     'hi.reading': '读取中…', 'hi.pulling': '正在 pull 最新发言…', 'hi.sending': '正在发送并 push…',
     'hi.read': '已读取 %s 的 CHAT.md（仓库：%s）%s', 'hi.arch': ' + 归档 %s',
@@ -183,7 +183,7 @@ var I18N = {
     'hi.sent': '已发言', 'hi.filled': '已填充：%s',
     'hf.onlytag': '只看对话 %s（%s 条）', 'hf.clearing': '取消筛选',
     'hf.archive': '以下为归档 %s —— 更早的发言（CHAT.md 只留最近 100 条）',
-    'tb.reply': '↳ 回应 ', 'tg.end': ' · End', 'tb.fill': '点击自动填充：收件人 / Tag / Re:No', 'tg.click': '点击只看该对话',
+    'tg.label': '对话：', 'tg.end': ' · End', 'tb.fill': '点击自动填充：收件人 / Tag / ReNo', 'tg.click': '点击只看该对话',
     'err.empty': '内容为空，先输入要说的话', 'err.speaker': '请填写发件人', 'err.readfail': '读取失败', 'err.updfail': '刷新失败', 'err.speakfail': '发言失败',
     'err.reqfail': '请求失败：', 'err.openfile': '打开文件失败：',
     'warn.end.needtag': '勾选了「结束该Tag」，请先填对话短名（不用写 Tag. 前缀）',
@@ -205,7 +205,7 @@ var I18N = {
     'logout': 'Logout', 'lang.switch': '中', 'room.sel': 'Switch room',
     'fld.from': 'From', 'fld.to': 'To', 'fld.subject': 'Subject', 'fld.end': 'End this Tag', 'fld.reply': 'Re No.',
     'speak': 'Post', 'update': 'Refresh', 'loading': 'Loading…',
-    'ph.from': 'Custom sender', 'ph.to': 'Everyone', 'ph.subject': 'Leave empty to use first line', 'ph.session': 'Optional, short name only, e.g. cup-quota-0917 (no Tag. prefix)',
+    'ph.from': 'Custom sender', 'ph.to': 'Everyone', 'ph.subject': 'Leave empty to use first line', 'ph.session': 'Optional, short name only, e.g. cup-quota-0917 (no Tag. / Tag: prefix)',
     'ph.reply': 'No.', 'ph.msg': 'Type your message, Ctrl/⌘+Enter to send…',
     'hi.reading': 'Loading…', 'hi.pulling': 'Pulling latest posts…', 'hi.sending': 'Posting and pushing…',
     'hi.read': 'Read CHAT.md of %s (repo: %s)%s', 'hi.arch': ' + archive %s',
@@ -213,7 +213,7 @@ var I18N = {
     'hi.sent': 'Posted', 'hi.filled': 'Filled: %s',
     'hf.onlytag': 'Only conversation %s (%s posts)', 'hf.clearing': 'Clear filter',
     'hf.archive': 'Older posts from archive %s (CHAT.md keeps only latest 100)',
-    'tb.reply': '↳ reply ', 'tg.end': ' · End', 'tb.fill': 'Click to autofill: To / Tag / Re:No', 'tg.click': 'Click to view this conversation only',
+    'tg.label': 'Conversation: ', 'tg.end': ' · End', 'tb.fill': 'Click to autofill: To / Tag / ReNo', 'tg.click': 'Click to view this conversation only',
     'err.empty': 'Message is empty', 'err.speaker': 'Please enter the sender', 'err.readfail': 'Read failed', 'err.updfail': 'Refresh failed', 'err.speakfail': 'Post failed',
     'err.reqfail': 'Request failed: ', 'err.openfile': 'Failed to open file: ',
     'warn.end.needtag': 'You checked "End this Tag", please fill in the tag name first (no Tag. prefix)',
@@ -592,9 +592,10 @@ function blockHtml(b){
   h.push('<span class="who">' + esc(b.speaker) + '</span>');
   if (b.tag){
     h.push('<span class="tag' + (b.tagEnd ? ' tag-end' : '') + '" data-tag="' + esc(b.tag) +
-           '" title="' + esc(t('tg.click')) + '">' + esc(tagLabel(b.tag)) + (b.tagEnd ? ' · End' : '') + '</span>');
+           '" title="' + esc(t('tg.click')) + '">' + t('tg.label') + esc(tagLabel(b.tag)) + (b.tagEnd ? ' · End' : '') + '</span>');
   }
-  if (b.reply) h.push('<a class="re" href="#' + anchorOf(b.reply) + '">' + t('tb.reply') + esc(b.reply) + '</a>');
+  if (b.reply) h.push('<a class="re" href="#' + anchorOf(b.reply) + '" title="' + esc(b.reply) + '">'
+                      + esc(reLabel(b.reply)) + '</a>');
   h.push('</div>');
   // 元数据**按原始格式逐行**渲染（`- 时间：/ - 收件人：/ - 主题：` 各占一行）；
   // `- 对话：` 行由标题徽标表达，不在这里重复（2026-09-15 用户明确：元数据保持原样）。
@@ -662,14 +663,21 @@ function bareTag(v){
 }
 function fullTag(v){ var b = bareTag(v); return b ? ('Tag.' + b) : ''; }
 
-// Tag 的**显示**文案：`Tag.<短名>` → `#<短名>`（2026-09-17 用户定，更短更直观；2026-09-17 统一到
-// 全部显示位置：标题徽标 / 筛选条 / 各类提示文案）。
+// Tag 的**显示**文案：`Tag.<短名>` → `Tag:<短名>`（2026-09-17 用户定；配合 reLabel() 读作
+// 「对话：Tag:<短名> ReNo:<编号>」。已统一到全部显示位置：标题徽标 / 筛选条 / 各类提示文案）。
 // ⚠️ 纯显示层，两条铁律：
 //   ① 凡是**比较 / 存储 / 提交**（closedTags 判定、tagOwner、filterTag、data-tag、提交给服务端）
 //      一律用规范形式 `Tag.<短名>`；
 //   ② 凡是**给人看**的文本，一律套 tagLabel()。
 //   ⇒ 渲染出的 `#` 只在 HTML 文本节点里，CHAT.md 一字不动。
-function tagLabel(v){ var b = bareTag(v); return b ? ('#' + b) : ''; }
+function tagLabel(v){ var b = bareTag(v); return b ? ('Tag:' + b) : ''; }
+
+// 回应编号的**显示**文案：`No.144` → `ReNo:144`（2026-09-17 用户定：与 Tag: 一起读作
+// 「对话：Tag:xxx ReNo:144」，含义更明确。文件里仍是 `Re: No.144`）。
+function reLabel(v){
+  var m = /(\d+)/.exec(String(v == null ? '' : v));
+  return m ? ('ReNo:' + m[1]) : '';
+}
 
 // 缺省值（规则 8）：主题还在讨论中 ⇒「当前会话 + 回应上一条」；上一个主题已 End ⇒ 留空待填新标签
 function applyDefault(p){
