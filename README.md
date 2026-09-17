@@ -23,14 +23,13 @@ go build -o agent_chatroom ./...
 | `PORT` | 监听端口（缺省 `8093`） |
 | `CHATROOM_DIR` | 逗号分隔的聊天室仓库目录列表，目录 basename 即聊天室 id；缺省 `/home/yaki/workspace/ra_chatroom`（部署时按实际路径配置） |
 | `CHATROOM_NOAUTH_WHITELIST` | 逗号分隔的免鉴权聊天室 id（这些聊天室 `/api/chat/*` 无需登录） |
-| `AUTH_JWT_SECRET` | JWT 共享密钥（HMAC-SHA256），**必须与 yakisite 一致** |
-| `ADMIN_USER` / `ADMIN_PASSWORD` | 主管理员账号（bcrypt 哈希），签发 token |
-| `AGENT_ADMIN_USER` / `AGENT_ADMIN_PASSWORD` | agent 管理员账号（可选） |
+| `AUTH_JWT_SECRET` | JWT 共享签名密钥（HMAC-SHA256），**必须与 yakisite 一致** |
+| `AUTH_SERVER_URL` | 统一认证服务地址（登录转发目标，缺省 `https://yakidev.top`） |
 
-## 认证
+## 认证（统一鉴权，登录转发到 yakisite）
 
-- 登录：`POST /api/chat/login`（body `{username,password}`）→ `{token, expires_at}`，用 `ADMIN_USER`/`ADMIN_PASSWORD` 校验、`AUTH_JWT_SECRET` 签发。
-- 鉴权：`Authorization: Bearer <jwt>`；白名单聊天室免登录。与 yakisite 共享 `AUTH_JWT_SECRET`，可互认 token。
+- 登录：`POST /api/chat/login`（body `{username,password}`）→ 代理转发到 `AUTH_SERVER_URL/api/auth/admin-login`，返回 `{token, expires_at}`。**本服务不本地校验账号**（凭据只在 yakisite 一份）。
+- 鉴权：`Authorization: Bearer <jwt>`；与 yakisite 共享 `AUTH_JWT_SECRET` 本地验签（无状态，无需回源），可互认 token。白名单聊天室免登录。
 
 ## 接口
 
