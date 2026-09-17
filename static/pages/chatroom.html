@@ -864,9 +864,12 @@ function show(content, note, archive, archName){
 
 // 点会话徽标 = 只看该会话；点「取消筛选」恢复全部
 box.addEventListener('click', function(e){
-  var t = e.target;
-  if (t && t.id === 'clearFilter'){ filterTag = ''; paint(); return; }
-  var el = (t && t.closest) ? t.closest('.tag') : null;
+  // ⚠️ 事件目标**不能**叫 t：`t` 是 i18n 的翻译函数，`var t` 会在本函数内遮蔽它，
+  // 使下面的 `t('fld.fillnote', …)` 变成「对事件对象调用」⇒ 抛 `t is not a function`，
+  // 于是**填充表单的代码整段不执行**（2026-09-17 实测：点标题条只报错、收件人/Tag/ReNo 不动）。
+  var tgt = e.target;
+  if (tgt && tgt.id === 'clearFilter'){ filterTag = ''; paint(); return; }
+  var el = (tgt && tgt.closest) ? tgt.closest('.tag') : null;
   if (el){
     var v = el.getAttribute('data-tag');
     filterTag = (filterTag === v) ? '' : v;
@@ -878,7 +881,7 @@ box.addEventListener('click', function(e){
   // ⚠️ 不能 return：a.re 在 .blk-title 内，点它**仍然要**触发下面的「填回复表单」行为
   //（原有行为保留，本次只**新增**「一定滚到位 + 找不到时提示」）。
   var missingRe = '';
-  var re = (t && t.closest) ? t.closest('a.re') : null;
+  var re = (tgt && tgt.closest) ? tgt.closest('a.re') : null;
   if (re){
     var rid = (re.getAttribute('href') || '').replace(/^#/, '');
     var rel = rid ? document.getElementById(rid) : null;
@@ -887,7 +890,7 @@ box.addEventListener('click', function(e){
   }
   // 点击任一条的标题条 → 自动填充回复表单（收件人=发言人；仅当该条带 Tag 时才一并填 Tag 与 Re:No，
   // 因为规则要求 Re 必须与 Tag 同行，否则不合规）
-  var bt = (t && t.closest) ? t.closest('.blk-title') : null;
+  var bt = (tgt && tgt.closest) ? tgt.closest('.blk-title') : null;
   if (bt){
     var s = bt.getAttribute('data-speaker');
     var st = bt.getAttribute('data-tag');
@@ -901,7 +904,10 @@ box.addEventListener('click', function(e){
     }
     createTag.checked = false;                 // 点标题 = 回复行为 ⇒ 退出创建态
     syncTagInputs();
-    lastAutoTo = to.value; lastAutoReply = reply.value; lastAutoTag = session.value;
+    // ⚠️ 这里**不能**把刚填的值写进 lastAuto*：applyDefault() 的判定是「值 == lastAuto* 就当成
+    // 「还停在自动默认值」并覆盖为默认」，而填完的值恰好等于 lastAuto* ⇒ 下一次重绘（点徽标筛选、
+    // 点刷新…）会把刚填的收件人 / ReNo **打回默认**（2026-09-17 实测：填 No.149 后重绘变回 No.150）。
+    // lastAuto* 只应记录「自动填的默认值」，用户/点击填充的值与它不等才不会被覆盖。
     setHint(t('hi.filled', note || t('fld.none')), 'ok');
     // 「找不到被回应的编号」优先于「已填充」提示：目标可能在更早、未显示的归档里
     if (missingRe) setHint(t('hint.anchor.none', missingRe), 'err');
