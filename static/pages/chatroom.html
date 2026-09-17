@@ -857,8 +857,9 @@ function show(content, note, archive, archName){
   rawArchive = archive || '';
   archiveName = archName || '';
   paint();
-  scrollToHash();
+  // ⚠️ 顺序：先出「已读取…」的常规提示，再跑深链跳转 —— 否则「找不到该编号」的提示会被它覆盖
   if(note) setHint(note, 'ok');
+  scrollToHash();
 }
 
 // 点会话徽标 = 只看该会话；点「取消筛选」恢复全部
