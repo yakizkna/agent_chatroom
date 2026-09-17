@@ -47,10 +47,10 @@ go build -o agent_chatroom ./...
 | `PORT` | Listen port (default `8093`) |
 | `CHATROOM_DIR` | Comma-separated list of chat-room repository directories; the directory basename is the room id; default `/home/yaki/workspace/ra_chatroom` (configure to match your deployment) |
 | `CHATROOM_NOAUTH_WHITELIST` | Comma-separated list of room ids that need **no login** (`/api/chat/*` open) |
-| `AUTH_JWT_SECRET` | Shared JWT signing key (HMAC-SHA256), **must match the unified auth service** (only used when auth is enabled) |
-| `AUTH_SERVER_URL` | Unified auth service base URL (login forward target); **empty = this service does no auth** |
+| `AUTH_JWT_SECRET` | Shared JWT signing key (HMAC-SHA256), **must match the JWT auth service** (only used when auth is enabled) |
+| `AUTH_SERVER_URL` | JWT auth service base URL (login forward target); **empty = this service does no auth** |
 
-## Auth (unified, login forwarded to `AUTH_SERVER_URL`)
+## Auth (JWT auth service)
 
 - `AUTH_SERVER_URL` empty → **no auth**: every `/api/chat/*` is allowed, the login endpoint returns success (no real account needed).
 - `AUTH_SERVER_URL` set → login enabled:
@@ -64,13 +64,6 @@ go build -o agent_chatroom ./...
 - `POST /api/chat/speak?room=<id>` — post a message (writes `CHAT.md` and pushes)
 - `POST /api/chat/update?room=<id>` — refresh (pull + read latest)
 - `GET /api/chat/file/*filepath?room=<id>` — serve files inside a repository (path-traversal guarded, dot-prefixed paths blocked)
-
-## nginx Reverse Proxy Example (site sub-path)
-
-```nginx
-location /chatroom { proxy_pass http://127.0.0.1:8093; proxy_set_header Host $host; }
-location /api/chat  { proxy_pass http://127.0.0.1:8093; proxy_set_header Host $host; }
-```
 
 `/api/auth`, `/static`, `/favicon.*` are served by other services on the same domain.
 

@@ -113,7 +113,7 @@ func (cr *ChatRooms) noAuthWhitelist() map[string]bool {
 	return out
 }
 
-// Auth 是 /api/chat/* 的统一鉴权中间件：请求 `?room=<id>` 指向的聊天室若在
+// Auth 是 /api/chat/* 的 JWT 鉴权中间件：请求 `?room=<id>` 指向的聊天室若在
 // CHATROOM_NOAUTH_WHITELIST 白名单里则直接放行（免登录）；否则走 RequireAdminJWT 管理端 JWT 鉴权。
 // room 为空时按 resolve 的缺省规则取首个聊天室再判定，保证与后续实际读写同一房间保持一致。
 func (cr *ChatRooms) Auth() gin.HandlerFunc {

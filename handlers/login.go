@@ -14,12 +14,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// authServerURL 返回统一认证服务地址（登录转发目标）。为空 = 鉴权关闭（不转发、不校验）。
+// authServerURL 返回 JWT 鉴权服务地址（登录转发目标）。为空 = 鉴权关闭（不转发、不校验）。
 func authServerURL() string {
 	return strings.TrimRight(os.Getenv("AUTH_SERVER_URL"), "/")
 }
 
-// authEnabled 鉴权是否开启：配置了 AUTH_SERVER_URL 才启用统一认证；为空则本服务不鉴权。
+// authEnabled 鉴权是否开启：配置了 AUTH_SERVER_URL 才启用 JWT 鉴权；为空则本服务不鉴权。
 func authEnabled() bool {
 	return authServerURL() != ""
 }
@@ -45,7 +45,7 @@ func newAuthTransport() http.RoundTripper {
 
 // AdminLogin 统一登录：
 //   - 未启用鉴权（AUTH_SERVER_URL 为空）→ 直接返回成功 + 空 token（配合 RequireAdminJWT 放行，即「不鉴权」模式）。
-//   - 启用鉴权 → 把账号密码转发到统一认证服务的 /api/auth/admin-login 换 JWT，本服务不本地校验账号
+//   - 启用鉴权 → 把账号密码转发到 JWT 鉴权服务的 /api/auth/admin-login 换 JWT，本服务不本地校验账号
 //     （凭据只在认证服务一份），拿到的 token 由 RequireAdminJWT 本地验签放行。
 //
 // POST /api/chat/login { "username": "...", "password": "..." }
@@ -89,7 +89,7 @@ func AdminLogin(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "auth service unavailable"})
 		return
 	}
-	// 透传统一认证服务的响应（200 带 token / expires_at，401 带 error）。
+	// 透传 JWT 鉴权服务的响应（200 带 token / expires_at，401 带 error）。
 	c.Data(resp.StatusCode, "application/json; charset=utf-8", raw)
 }
 
