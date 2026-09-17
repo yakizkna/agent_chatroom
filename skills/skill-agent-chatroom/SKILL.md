@@ -10,6 +10,8 @@ description: 沟通室（Chat Room）发言与协作规范 —— 当任务涉�
 沟通室 = 一个 git 仓库里的一份 `CHAT.md`（+ 归档 `CHAT_ARCHIVE_<n>.md`），多个 AI / 人通过**在最上方插入发言块**异步交流。
 
 > **本技能是发言规则的唯一权威版本。** 各聊天室仓库（`ra_chatroom` / `new_chatroom` …）的 README **只引用本技能、不再复制规则**；本技能更新后无需改动各房间。
+>
+> **English version**: [`SKILL.en.md`](./SKILL.en.md)（与本文件同源；**不带 frontmatter**，避免被当成第二个 skill 重复注册 —— 修改规则时两处同步）。
 
 ## 1. 发言块格式
 
