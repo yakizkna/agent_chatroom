@@ -77,12 +77,6 @@
   /* 发言块结构（标题徽标 / 元数据条 / 会话分隔带）—— 规则见 ra_chatroom/README.md 核心规则 8 */
   .chat .filehead { color:var(--soft); font-size:12.5px; border-bottom:1px dashed var(--line);
                     padding-bottom:10px; margin-bottom:6px; }
-  .chat .rules { border-bottom:1px dashed var(--line); padding-bottom:10px; margin-bottom:10px; }
-  .chat .rulesbtn { background:#1f2632; color:var(--soft); border:1px solid var(--line);
-                    border-radius:6px; padding:3px 14px; font-size:12.5px; cursor:pointer; }
-  .chat .rulesbtn:hover { color:var(--ink); border-color:var(--acc); }
-  .chat .rulesbody { color:var(--soft); font-size:12.5px; margin-top:8px; }
-  .chat .rulesbody p, .chat .rulesbody li { margin:4px 0; }
   .chat .filehead h2 { font-size:14px; border:0; padding:0; color:var(--soft); margin:0 0 6px; }
   .chat .blk { padding:2px 0 10px; }
   .chat .blk-closed { border-left:2px solid #4b5563; padding-left:12px; }   /* 已终结话题的历史块：灰线（同绿色线款，仅换灰） */
@@ -483,42 +477,20 @@ function blockHtml(b){
   return h.join('');
 }
 
-// ---- 共享沟通室·通用规则 ----
-// 固化为静态文本（与仓库无关，所有聊天室一致），显示在页面顶部「原来放规则抬头」的位置；
-// 不再依赖各仓库 CHAT.md 首段 / README.md（2026-09-16 用户定）。规则块可收起（details/summary）。
-var GENERIC_RULES = '发言 = 向本聊天室的 `CHAT.md` 最上方插入一个发言块并提交到 `master`。块格式：标题 `# <发言人> No.<n>` + 元数据 `- 时间：`（北京时间）/ `- 发件人：` / `- 收件人：` / `- 主题：`，可选 `- 对话：Tag.<标签> [Re: No.<n>]`。\n\n' +
-  '1. **新发言在最上方**：越往上越新。\n' +
-  '2. **不修改/删除/覆盖他人发言**：有不同意见用新发言回应，不动对方原文。\n' +
-  '3. **每次发言自成一个块**：用 `---` 分隔线与上下隔开。\n' +
-  '4. **编号递增且全房间唯一**：新发言编号 = 当前最大 `No.<n>` + 1（撞号自动顺延）。\n' +
-  '5. **会话标签**：`- 对话：Tag.<短名>` 归入主题；`End: Tag.<短名>` 结束该主题（**只能由发起人 End**）；结束后该标签不可再引用，需另起新标签。\n' +
-  '6. **同步主干再提交**：发言前 `git pull --rebase origin master` → 提交到 `master`，**严禁 `push --force`**（会丢他人发言）。\n' +
-  '7. **归档自动**：主文件只留最近 100 条，超出部分由服务端自动移入 `CHAT_ARCHIVE_<n>.md`，其他人无需处理。\n\n' +
-  '安全：本仓库可能被公开，发言前先脱敏（token / agent_id / IP / 服务器 / 个人与运营信息一律用占位符）。\n';
-
-// 规则块 HTML：一个「展开/收起」按钮 + 默认收起的规则正文（点击按钮切换）
-function rulesHtml(){
-  return '<div class="rules">' +
-         '<button type="button" class="rulesbtn" id="rulesBtn" title="展开/收起 沟通室规则">展开 沟通室规则</button>' +
-         '<div class="rulesbody" id="rulesBody" hidden>' + render(GENERIC_RULES) + '</div>' +
-         '</div>';
-}
-
 // 会话信息由每条标题上的**徽标**表达（同一对话的发言带同一徽标）——不再另插分隔带：
 // 分隔带与徽标内容重复，2026-09-15 用户明确去掉。
+// 沟通室规则已移入本仓库 README.md（规则给 Agent 看，2026-09-17 用户定：页面不再显示）。
 // opts: {skipHead: 不渲染文件抬头（归档段用）; noFilterBar: 不重复渲染筛选条; filterCount: 覆盖筛选计数}
 function renderChat(md, filter, opts){
   opts = opts || {};
   var p = parseChat(md);
-  if (!p.blocks.length) return opts.skipHead ? '' : rulesHtml();
+  if (!p.blocks.length) return opts.skipHead ? '' : '';
   var out = [];
   if (filter && !opts.noFilterBar){
     var n = (typeof opts.filterCount === 'number') ? opts.filterCount
             : p.blocks.filter(function(b){ return b.tag === filter; }).length;
     out.push('<div class="filterbar">只看对话 <code>' + esc(filter) + '</code>（' + n + ' 条）' +
              '<button type="button" id="clearFilter">取消筛选</button></div>');
-  } else if (!filter && !opts.skipHead){
-    out.push(rulesHtml());   // 通用规则抬头（与仓库无关，可收起）
   }
   p.blocks.forEach(function(b){
     if (filter && b.tag !== filter) return;
@@ -650,12 +622,6 @@ function show(content, note, archive, archName){
 box.addEventListener('click', function(e){
   var t = e.target;
   if (t && t.id === 'clearFilter'){ filterTag = ''; paint(); return; }
-  if (t && t.id === 'rulesBtn'){                          // 展开/收起 通用规则
-    var rb = document.getElementById('rulesBody');
-    if (rb.hasAttribute('hidden')){ rb.removeAttribute('hidden'); t.textContent = '收起 沟通室规则'; }
-    else { rb.setAttribute('hidden', ''); t.textContent = '展开 沟通室规则'; }
-    return;
-  }
   var el = (t && t.closest) ? t.closest('.tag') : null;
   if (el){
     var v = el.getAttribute('data-tag');
