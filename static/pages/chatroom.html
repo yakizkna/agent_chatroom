@@ -176,7 +176,7 @@ var currentRoom = (function(){
 })();
 var rooms = [];
 function roomQuery(){ return currentRoom ? ('?room=' + encodeURIComponent(currentRoom)) : ''; }
-// 文件共享改走 yakisite 代理路由（仓库公开/私有均可，需登录 JWT）；按当前聊天室带上 ?room=
+// 文件共享走本服务代理路由（仓库公开/私有均可，需登录 JWT）；按当前聊天室带上 ?room=
 function fileHref(p){
   return '/api/chat/file/' + p.split('/').map(function(seg){ return encodeURIComponent(seg); }).join('/') +
          roomQuery();
@@ -293,7 +293,7 @@ function inline(s){
       if (/^https?:/i.test(u)) {                         // 外链：原样
         href = u;
       } else {
-        // 站内文件（相对路径或 file://）→ 走 yakisite 代理路由（fileHref，仓库内相对路径；仓库私有也能访问）
+        // 站内文件（相对路径或 file://）→ 走本服务代理路由（fileHref，仓库内相对路径；仓库私有也能访问）
         var p = u.replace(/^file:\/\//i, '');
         var idx = p.indexOf('ra_chatroom/');
         if (idx >= 0) p = p.slice(idx + 'ra_chatroom/'.length);     // 绝对 file:// 路径：取仓库内相对路径
@@ -724,7 +724,7 @@ var BIN_EXT = {png:1, jpg:1, jpeg:1, gif:1, webp:1, bmp:1, ico:1, pdf:1, zip:1, 
                mp3:1, mp4:1, webm:1, wav:1, woff:1, woff2:1, ttf:1, otf:1, exe:1, bin:1, xlsx:1, docx:1};
 var TEXT_TYPE = {json:'application/json', csv:'text/csv'};   // 其余文本一律 text/plain
 // ⚠️ html / svg 也按 text/plain 呈现，**绝不**给 text/html —— blob 会继承本站 origin，
-// 以 text/html 渲染等于让附件里的脚本在 yakidev.top 下执行。
+// 以 text/html 渲染等于让附件里的脚本在本站域下执行。
 fetch(href, {headers: authHeaders()})
   .then(function(r){
     if(r.status === 401){ showLogin('登录已失效，请重新登录'); throw new Error('unauthorized'); }

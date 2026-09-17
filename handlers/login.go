@@ -14,18 +14,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// authServerURL 返回统一认证服务地址（登录转发目标）。缺省 yakisite 公网地址。
+// authServerURL 返回统一认证服务地址（登录转发目标）。为空 = 鉴权关闭（不转发、不校验）。
 func authServerURL() string {
-	if v := os.Getenv("AUTH_SERVER_URL"); v != "" {
-		return strings.TrimRight(v, "/")
-	}
-	return "https://yakidev.top"
+	return strings.TrimRight(os.Getenv("AUTH_SERVER_URL"), "/")
+}
+
+// authEnabled 鉴权是否开启：配置了 AUTH_SERVER_URL 才启用统一认证；为空则本服务不鉴权。
+func authEnabled() bool {
+	return authServerURL() != ""
 }
 
 // authClient 发起「服务端到服务端」的登录转发请求。
-// 默认禁用系统代理直连（同 ra_duel_bot/auth.py：本机代理挂了/不转发时登录会超时；
-// AUTH_USE_PROXY=1 可显式改回走系统代理）。
-// 仅用短超时（连接 5s + 整体 10s），避免 yakisite 不可用时前端无响应卡死。
+// 默认禁用系统代理直连（真机部署时本机代理挂掉/不转发，转发会超时；AUTH_USE_PROXY=1 改回走系统代理）。
+// 仅用短超时（连接 5s + 整体 10s），避免认证服务不可用时前端无响应卡死。
 var authClient = &http.Client{
 	Transport: newAuthTransport(),
 	Timeout:   10 * time.Second,
@@ -36,18 +37,20 @@ func newAuthTransport() http.RoundTripper {
 		DialContext: (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
 	}
 	if os.Getenv("AUTH_USE_PROXY") != "1" {
-		// 直连：禁用系统 HTTP/SOCKS 代理（同 ra_duel_bot/auth.py）。
+		// 直连：禁用系统 HTTP/SOCKS 代理。
 		tr.Proxy = func(*http.Request) (*url.URL, error) { return nil, nil }
 	}
 	return tr
 }
 
-// AdminLogin 统一登录代理：把账号密码转发到统一认证服务（yakisite）换 JWT，
-// 本服务不再本地校验账号（凭据只在 yakisite 一份）。与 yakisite 共享 AUTH_JWT_SECRET，
-// 拿到的 token 由中间件 RequireAdminJWT 本地验签即可放行。
+// AdminLogin 统一登录：
+//   - 未启用鉴权（AUTH_SERVER_URL 为空）→ 直接返回成功 + 空 token（配合 RequireAdminJWT 放行，即「不鉴权」模式）。
+//   - 启用鉴权 → 把账号密码转发到统一认证服务的 /api/auth/admin-login 换 JWT，本服务不本地校验账号
+//     （凭据只在认证服务一份），拿到的 token 由 RequireAdminJWT 本地验签放行。
+//
 // POST /api/chat/login { "username": "...", "password": "..." }
 //
-//	→ 200 { "token": "<jwt>", "expires_at": <unix> }
+//	→ 200 { "token": "<jwt>", "expires_at": <unix> }（鉴权关闭时为空 token）
 //	→ 401 { "error": "unauthorized" }
 //	→ 502 { "error": "auth service unavailable" }（认证服务不可达）
 func AdminLogin(c *gin.Context) {
@@ -57,6 +60,12 @@ func AdminLogin(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Username == "" || req.Password == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if !authEnabled() {
+		// 鉴权关闭：不校验账号，直接返回成功（前端无需真实登录）。
+		c.JSON(http.StatusOK, gin.H{"token": "", "expires_at": 0})
 		return
 	}
 
@@ -84,9 +93,14 @@ func AdminLogin(c *gin.Context) {
 	c.Data(resp.StatusCode, "application/json; charset=utf-8", raw)
 }
 
-// RequireAdminJWT 管理端 JWT 校验中间件（鉴权，fail-closed）。被 chat.go 的 ChatRooms.Auth() 复用。
+// RequireAdminJWT 管理端 JWT 校验中间件（鉴权）。被 chat.go 的 ChatRooms.Auth() 复用。
+// 未启用鉴权（AUTH_SERVER_URL 为空）→ 直接放行（不鉴权模式）；启用则校验 Bearer JWT（fail-closed）。
 func RequireAdminJWT() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if !authEnabled() {
+			c.Next() // 鉴权关闭：全放行
+			return
+		}
 		auth := c.GetHeader("Authorization")
 		token, ok := strings.CutPrefix(auth, "Bearer ")
 		if !ok || token == "" {

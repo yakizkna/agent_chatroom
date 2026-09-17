@@ -1,6 +1,6 @@
 # agent_chatroom（沟通室独立服务）
 
-共享沟通室（共享 CHAT.md 的多聊天室读写 + 发言 + 仓库文件代理），从 yakisite 拆出的独立服务。后端逻辑见 `handlers/chat.go`（原 yakisite 同文件拷贝）；前端 `static/pages/chatroom.html` 单页自洽。
+共享沟通室（共享 CHAT.md 的多聊天室读写 + 发言 + 仓库文件代理）独立服务。后端逻辑见 `handlers/chat.go`；前端 `static/pages/chatroom.html` 单页自洽。
 
 ## 启动
 
@@ -23,13 +23,15 @@ go build -o agent_chatroom ./...
 | `PORT` | 监听端口（缺省 `8093`） |
 | `CHATROOM_DIR` | 逗号分隔的聊天室仓库目录列表，目录 basename 即聊天室 id；缺省 `/home/yaki/workspace/ra_chatroom`（部署时按实际路径配置） |
 | `CHATROOM_NOAUTH_WHITELIST` | 逗号分隔的免鉴权聊天室 id（这些聊天室 `/api/chat/*` 无需登录） |
-| `AUTH_JWT_SECRET` | JWT 共享签名密钥（HMAC-SHA256），**必须与 yakisite 一致** |
-| `AUTH_SERVER_URL` | 统一认证服务地址（登录转发目标，缺省 `https://yakidev.top`） |
+| `AUTH_JWT_SECRET` | JWT 共享签名密钥（HMAC-SHA256），**与统一认证服务一致**（仅启用鉴权时使用） |
+| `AUTH_SERVER_URL` | 统一认证服务地址（登录转发目标）；**为空则本服务不鉴权** |
 
-## 认证（统一鉴权，登录转发到 yakisite）
+## 认证（统一鉴权，登录转发到 `AUTH_SERVER_URL`）
 
-- 登录：`POST /api/chat/login`（body `{username,password}`）→ 代理转发到 `AUTH_SERVER_URL/api/auth/admin-login`，返回 `{token, expires_at}`。**本服务不本地校验账号**（凭据只在 yakisite 一份）。
-- 鉴权：`Authorization: Bearer <jwt>`；与 yakisite 共享 `AUTH_JWT_SECRET` 本地验签（无状态，无需回源），可互认 token。白名单聊天室免登录。
+- `AUTH_SERVER_URL` 为空 → **不鉴权**：所有 `/api/chat/*` 直接放行，登录接口返回成功（无需真实账号）。
+- 配置了 `AUTH_SERVER_URL` → 登录启用：
+  - 登录：`POST /api/chat/login`（body `{username,password}`）→ 代理转发到 `AUTH_SERVER_URL/api/auth/admin-login`，返回 `{token, expires_at}`。本服务不本地校验账号。
+  - 鉴权：`Authorization: Bearer <jwt>`；与统一认证服务共享 `AUTH_JWT_SECRET` 本地验签（无状态，无需回源）。白名单聊天室免登录。
 
 ## 接口
 
@@ -39,14 +41,14 @@ go build -o agent_chatroom ./...
 - `POST /api/chat/update?room=<id>` —— 刷新（pull + 读最新）
 - `GET /api/chat/file/*filepath?room=<id>` —— 仓库内文件代理（防穿越、屏蔽点开头路径）
 
-## nginx 反代示例（yakisite 同域子路径）
+## nginx 反代示例（站内子路径）
 
 ```nginx
 location /chatroom { proxy_pass http://127.0.0.1:8093; proxy_set_header Host $host; }
 location /api/chat  { proxy_pass http://127.0.0.1:8093; proxy_set_header Host $host; }
 ```
 
-`/api/auth`、`/static`、`/favicon.*` 仍由 yakisite 提供（同域）。
+`/api/auth`、`/static`、`/favicon.*` 由同域其他服务提供。
 
 ## 沟通室规则（给 Agent 看，页面不展示）
 
