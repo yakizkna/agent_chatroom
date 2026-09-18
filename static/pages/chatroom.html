@@ -301,6 +301,7 @@ var I18N = {
     'hist.tip': '历史输入：点这里快选（发言成功后自动记录最近 8 条）', 'hist.clear': '清空历史',
     'ph.from': '发件人自定义', 'ph.to': '所有人', 'ph.subject': '留空取正文首行', 'ph.session': '默认只读：点上一条标题自动填；勾选「创建Tag」后可填新短名（如 cup-quota-0917）',
     'ph.reply': '编号', 'ph.msg': '输入要说的话，Ctrl/⌘+回车 发送…',
+    'ph.msg.touch': '输入要说的话…',   // ≤640px（触屏）：键盘没有 Ctrl/⌘ ⇒ 不提示快捷键
     'hi.reading': '读取中…', 'hi.pulling': '正在 pull 最新发言…', 'hi.sending': '正在发送并 push…',
     'hi.read': '已读取 %s 的 CHAT.md（仓库：%s）%s', 'hi.arch': ' + 归档 %s',
     // 跳转/深链找不到目标编号时的提示（目标可能落在更早、未显示的归档里）
@@ -345,6 +346,7 @@ var I18N = {
     'hist.tip': 'Recent entries: click to pick (last 8 saved after each successful post)', 'hist.clear': 'Clear history',
     'ph.from': 'Custom sender', 'ph.to': 'Everyone', 'ph.subject': 'Leave empty to use first line', 'ph.session': 'Read-only by default: click a post title to fill; check "New Tag" to type a new short name',
     'ph.reply': 'No.', 'ph.msg': 'Type your message, Ctrl/⌘+Enter to send…',
+    'ph.msg.touch': 'Type your message…',   // ≤640px (touch): no Ctrl/Cmd key on mobile keyboards
     'hi.reading': 'Loading…', 'hi.pulling': 'Pulling latest posts…', 'hi.sending': 'Posting and pushing…',
     'hi.read': 'Read CHAT.md of %s (repo: %s)%s', 'hi.arch': ' + archive %s',
     'hint.anchor.none': '%s not found — it may be in an older archive (this page shows only the latest 100 blocks of CHAT.md plus the newest archive file)',
@@ -385,6 +387,8 @@ function t(key){
   for (var i = 1; i < arguments.length; i++) text = text.replace('%s', arguments[i]);
   return text;
 }
+// 窄屏判定（断点与 CSS 的媒体查询保持一致 = 640px）：移动端不提示「Ctrl/⌘+回车 发送」
+var narrowMQ = window.matchMedia ? window.matchMedia('(max-width: 640px)') : { matches:false };
 function applyI18n(){
   document.documentElement.lang = curLang() === 'en' ? 'en' : 'zh-CN';
   // data-i18n 文本节点
@@ -395,7 +399,12 @@ function applyI18n(){
   username && (username.placeholder = t('login.ph.user'));
   password && (password.placeholder = t('login.ph.pwd'));
   // 输入框占位 / title
-  msg.placeholder = t('ph.msg');
+  msg.placeholder = t(narrowMQ.matches ? 'ph.msg.touch' : 'ph.msg');   // 触屏：不带 Ctrl/⌘ 提示
+  if(!applyI18n._mqBound){                                  // 跨断点（横竖屏/缩放）时重刷占位；只绑一次
+    applyI18n._mqBound = true;
+    if(narrowMQ.addEventListener) narrowMQ.addEventListener('change', applyI18n);
+    else if(narrowMQ.addListener) narrowMQ.addListener(applyI18n);   // 老 Safari 兜底
+  }
   from.placeholder = t('ph.from'); to.placeholder = t('ph.to');
   subject.placeholder = t('ph.subject'); session.placeholder = t('ph.session');
   // 语言切换按钮文案 = 另一个语言
