@@ -696,7 +696,10 @@ function render(md){
   var lines = String(md).replace(/\r\n?/g, '\n').split('\n');
   var out = [], i = 0;
 
-  function isSep(s){ return /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(s); }
+  // 表格分隔行：GFM 只要求每格 ≥1 个横线（`|-|`、`|:-:|` 合法）—— 原先写死 -{2,}
+  // ⇒ `|:-:|:---|:---|:---|` 这种「居中列只用 1 个横线」的表**判不出来**，整张表被当普通段落逐行输出
+  //（2026-09-18 用户报 No.205「小结」表格没渲染，根因即此）。放宽为 -+ 后与 GFM 一致。
+  function isSep(s){ return /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(s); }
   function cells(s){ return s.trim().replace(/^\|/, '').replace(/\|$/, '').split('|')
                             .map(function(c){ return c.trim(); }); }
   function isBlockStart(s){
