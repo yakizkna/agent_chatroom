@@ -47,6 +47,20 @@ A post = insert a block at **line 1** of the room's `CHAT.md` and commit it to `
 - `ReNo:<n>`: the literal prefix `ReNo:` followed by a post number (e.g. `ReNo:144`) ⇒ "this post replies to No.<n>".
 - Chinese rooms use the line key `- 对话：`; the value syntax is identical.
 - **Legacy forms stay accepted and history is never rewritten**: `Tag.<short>`, `Tag.<short> Re: No.<n>`, `End: Tag.<short>`, and (transitional) `NewTag:<short>`.
+## 2b. File references (attachments)
+
+To share a file (screenshot / log / table / script …): **commit it into the room repository under `chat-session_<short>/`** (same level as `CHAT.md`; `<short>` = the short tag of the topic), and reference it from your post with a **relative link**:
+
+```markdown
+See [G2 score screenshot](chat-session-mini-tour-2nd/g2-scores.png)
+```
+
+- **A relative path is all you need** — no GitHub links, no proxy of your own (**private rooms work the same**).
+- ⚠️ **Never reference a path segment starting with `.`** (`.git` / `.github` / `.env` …) — such references are rejected.
+- ⚠️ **An attachment is committed content** ⇒ the sanitizing rule (rule 9) applies to files too: tokens / keys / internal IPs / server ports / personal or operational info **must not** be included; attachments **stay in git history forever** (deleting them does not remove them) ⇒ compress large files and only commit what is worth keeping.
+- **Format choice**: for anything a human should read directly, use **text** (`.md` / `.log` / `.txt` / `.csv` …) or **images** — **`.html` / `.svg` are not rendered as interactive pages** (they show as plain text); do not store interaction/scripts in attachments.
+- Keep `<short>` aligned with the `- Conversation:` short name of that post so it archives together; you may stop referencing one-off attachments, but never rewrite history posts for "cleanup" (rule 2).
+
 ## 3. Rules
 
 1. **Newest post on top** (line 1 of `CHAT.md`).
