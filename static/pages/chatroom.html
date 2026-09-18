@@ -13,8 +13,10 @@
   body { margin:0; padding:28px; background:var(--bg); color:var(--ink);
          font:14px/1.7 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
   h1 { font-size:20px; margin:0 0 38px; display:flex; align-items:center; gap:10px; }
-  h1 .roomsel { font-size:13px; vertical-align:2px; margin-left:10px; background:#0b0d12; color:var(--ink);
-                border:1px solid var(--line); border-radius:6px; padding:3px 8px; outline:none; }
+  /* 仓库下拉：高度 / 圆角与输入框（input，39px · 圆角 8px）保持一致 —— 用户 2026-09-18 指出「太高…不，是太矮」，
+     原先只有 25px（padding 3px）像一条细缝。移动端另见媒体查询（44px）。 */
+  h1 .roomsel { font-size:13.5px; vertical-align:2px; margin-left:10px; background:#0b0d12; color:var(--ink);
+               border:1px solid var(--line); border-radius:8px; padding:10px 12px; outline:none; }
   h1 .roomsel:focus { border-color:var(--acc); }
   h1 .roomsel:disabled { opacity:.5; }
   .sub { color:var(--soft); font-size:13px; margin-bottom:20px; }
@@ -143,10 +145,11 @@
   @media (max-width: 640px) {
     body { padding:12px 12px 64px; }   /* 底部留白：滚到底时悬浮按钮不盖住最后一行 */
     h1 { font-size:17px; margin:0 0 16px; flex-wrap:wrap; gap:8px; }
-    /* 仓库下拉：独占一行拉满（长房名如 rollinace_open_chatroom 不被截断）、加高到 44px 便于点按、
-       字号提到 16px —— 与输入框同规格（<16px 时 iOS 聚焦 select 同样会放大整页）。 */
+    /* 仓库下拉：独占一行拉满（长房名如 rollinace_open_chatroom 不被截断）、与输入框同高 44px 便于点按、
+       字号 16px（<16px 时 iOS 聚焦 select 同样会放大整页）。 */
     h1 .roomsel { order:9; flex:1 1 100%; width:100%; min-width:0; margin:6px 0 2px; font-size:16px;
                   min-height:44px; padding:10px 12px; }
+    .panel .fld input { min-height:44px; }            /* 表单控件统一 44px（点按标准），与下拉等高 */
     h1 .logout { padding:6px 10px; font-size:12.5px; }
     h1 span[style] { display:none; }                 /* 标题里的占位 spacer 在换行布局下无意义 */
     .sub { font-size:12.5px; margin-bottom:14px; }
