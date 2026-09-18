@@ -1349,6 +1349,14 @@ fetch(href, {headers: authHeaders()})
 
 // 启动：总是先尝试读取。白名单聊天室无需登录即可进入（此时不显示登出）；
 // 需要鉴权且无（或失效）token 时 /api/chat 返回 401 → 自动弹登录门禁。
+// URL 语言参数优先：?lang=en → 英文界面，?lang=zh-cn/zh → 中文界面，无参数沿用上次选择（默认中文）
+(function () {
+  var m = location.search.match(/[?&]lang=([^&#]+)/);
+  if (!m) return;
+  var lang = decodeURIComponent(m[1]).toLowerCase();
+  if (lang === 'en') localStorage.setItem('chat_lang', 'en');
+  else if (lang === 'zh-cn' || lang === 'zh') localStorage.setItem('chat_lang', 'zh');
+})();
 applyI18n();
 load();
 </script>
