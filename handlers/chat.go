@@ -108,6 +108,12 @@ type ChatHandler struct {
 	mu   sync.Mutex
 }
 
+// NewChatHandler 按房间目录构造 handler（room 取目录 basename、file = <dir>/CHAT.md）。
+// 供服务启动之外的调用方使用 —— 例如 `agent_chatroom archive <dir>…` 命令行模式（ra_tasks 定期归档任务）。
+func NewChatHandler(dir string) *ChatHandler {
+	return &ChatHandler{room: filepath.Base(dir), dir: dir, file: filepath.Join(dir, "CHAT.md")}
+}
+
 // ChatRooms 管理一组聊天室：CHATROOM_DIR 为逗号分隔的仓库目录列表，
 // 每个目录的 **basename** 即聊天室 id。单房时缺省回退与历史一致。
 type ChatRooms struct {
@@ -708,6 +714,51 @@ func (h *ChatHandler) archiveOverflow() ([]string, string) {
 		return touched, "回写 CHAT.md 失败：" + err.Error()
 	}
 	return touched, ""
+}
+
+// ArchiveIfNeeded 按「批量归档」规则检查本房间，需要时归档并提交推送到 origin。
+// 供 ra_tasks 的定期/手动任务调用（`agent_chatroom archive <dir>…`）—— 与发言路径**共用同一份**
+// 阈值与归档实现，避免「两套规则漂移」；也正是它解决了「纯 git 直写房间永远不触发归档」。
+//   - dryRun = true 只报告将要做的事，不写文件、不动 git；
+//   - 成功返回一行人类可读摘要；出错返回 error。归档本身**幂等**：push 失败已本地提交也不丢内容，重跑即可补推。
+func (h *ChatHandler) ArchiveIfNeeded(dryRun bool) (string, error) {
+	raw, err := os.ReadFile(h.file)
+	if err != nil {
+		return "", fmt.Errorf("读取 CHAT.md 失败：%v", err)
+	}
+	n := len(chatBlockHeadRE.FindAllString(string(raw), -1))
+	if n <= chatKeepMax {
+		return fmt.Sprintf("%s：%d 条（≤%d，无需归档）", h.room, n, chatKeepMax), nil
+	}
+	if dryRun {
+		return fmt.Sprintf("%s：【dry】%d 条 → 将搬走最旧 %d 条，主文件回落到 %d 条",
+			h.room, n, n-chatKeepMin, chatKeepMin), nil
+	}
+	// 先同步远端：房间随时有他人发言，落后状态下归档后 push 很可能被拒
+	if rc, out := h.git("pull", "--rebase", "origin", "master"); rc != 0 {
+		h.git("rebase", "--abort")
+		return "", fmt.Errorf("同步主干失败（已 abort，未归档）：%s", strings.TrimSpace(out))
+	}
+	touched, msg := h.archiveOverflow()
+	if msg != "" {
+		return "", fmt.Errorf("归档失败：%s", msg)
+	}
+	if len(touched) == 0 {
+		return fmt.Sprintf("%s：%d 条（≤%d，无需归档）", h.room, n, chatKeepMax), nil
+	}
+	addArgs := append([]string{"add", "CHAT.md"}, touched...)
+	if rc, out := h.git(addArgs...); rc != 0 {
+		return "", fmt.Errorf("git add 失败：%s", out)
+	}
+	commitMsg := fmt.Sprintf("chore(archive): 批量归档（主文件回落至 %d 条）—— %s",
+		chatKeepMin, strings.Join(touched, ", "))
+	if rc, out := h.git("commit", "-m", commitMsg); rc != 0 {
+		return "", fmt.Errorf("git commit 失败：%s", out)
+	}
+	if rc, out := h.git("push", "origin", "master"); rc != 0 {
+		return "", fmt.Errorf("git push 失败（已本地提交、内容未丢，重跑本命令即可补推）：%s", out)
+	}
+	return fmt.Sprintf("%s：归档完成 → %s（主文件回落到 %d 条）", h.room, strings.Join(touched, ", "), chatKeepMin), nil
 }
 
 func (h *ChatHandler) readChat() (string, string) {

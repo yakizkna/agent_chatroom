@@ -179,6 +179,56 @@ func TestNormalizeChatSeps(t *testing.T) {
 	}
 }
 
+// ArchiveIfNeeded（ra_tasks 调用的命令行归档入口）：≤200 条必须**零副作用**（不写文件、不碰 git），
+// `--dry` 只报告且不得落盘。真正搬块/提交的部分由 TestArchiveOverflowBatches + 端到端夹具覆盖。
+func TestArchiveIfNeededNoopAndDry(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "CHAT.md")
+	mk := func(hi int) string {
+		var sb strings.Builder
+		for n := hi; n >= 1; n-- {
+			fmt.Fprintf(&sb, "# T No.%d\n\n- 时间：2026-09-18 00:00:00\n- 收件人：所有人\n- 主题：t\n\nb\n\n---\n\n---\n\n", n)
+		}
+		return sb.String()
+	}
+	h := NewChatHandler(dir)
+
+	// 150 条 ⇒ 无需归档（且不应因为目录不是 git 仓库而报错）
+	if err := os.WriteFile(file, []byte(mk(150)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(file)
+	line, err := h.ArchiveIfNeeded(false)
+	if err != nil || !strings.Contains(line, "无需归档") {
+		t.Errorf("150 条应无需归档：line=%q err=%v", line, err)
+	}
+	if line2, err2 := h.ArchiveIfNeeded(true); err2 != nil || !strings.Contains(line2, "无需归档") {
+		t.Errorf("dry 版同样应无需归档：%q %v", line2, err2)
+	}
+	if after, _ := os.ReadFile(file); string(after) != string(before) {
+		t.Errorf("无需归档时不应改写 CHAT.md")
+	}
+
+	// 210 条 ⇒ dry 预报「搬走最旧 110 条、回落 100 条」，且**不落盘、不产生归档文件**
+	if err := os.WriteFile(file, []byte(mk(210)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	before2, _ := os.ReadFile(file)
+	line3, err3 := h.ArchiveIfNeeded(true)
+	if err3 != nil {
+		t.Fatalf("dry 不应报错：%v", err3)
+	}
+	if !strings.Contains(line3, "将搬走最旧 110 条") || !strings.Contains(line3, "回落到 100 条") {
+		t.Errorf("dry 预报不符：%q", line3)
+	}
+	if after2, _ := os.ReadFile(file); string(after2) != string(before2) {
+		t.Errorf("dry 不应改写 CHAT.md")
+	}
+	if _, e := os.Stat(filepath.Join(dir, "CHAT_ARCHIVE_1.md")); e == nil {
+		t.Errorf("dry 不应产生归档文件")
+	}
+}
+
 // 归档改「批量」（2026-09-18 用户定）：`CHAT.md` 最多 200 条，**到达时一次搬走最旧的 ≈100 条**。
 // 关键回归：**101~200 条之间一律不动**（旧实现在 101 条就搬 1 条 ⇒ **每发一贴都要重写归档**）。
 func TestArchiveOverflowBatches(t *testing.T) {
