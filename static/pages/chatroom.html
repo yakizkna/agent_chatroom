@@ -2,6 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
+<!-- 移动端：按设备宽度渲染（此前缺这行 ⇒ 手机按 ~980px 渲染再整体缩小，字小、控件难点） -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title data-i18n="title.tab">沟通室 · RA</title>
 <link rel="icon" href="/static/images/chatroom-icon.jpg">
 <style>
@@ -107,6 +109,8 @@
               border-radius:8px; padding:0 12px; }
   label.chk:hover { border-color:var(--acc); }
   label.chk input { flex:none; margin:0; }
+  /* 三个勾选（不带Tag / 创建Tag / 结束Tag）成组：桌面端保持原有并排宽度 */
+  .chkrow { display:flex; align-items:center; gap:8px; flex:0 0 auto; }
   /* 「自动刷新」右侧的上次刷新时间（HH:MM:SS） */
   .autots { font-size:11px; color:var(--soft); font-variant-numeric:tabular-nums; }
   .hint { color:var(--soft); font-size:12px; margin:8px 2px 0; }
@@ -129,6 +133,49 @@
                       border-radius:8px; padding:10px 12px; font-size:13.5px; outline:none; }
   .login-card input:focus { border-color:var(--acc); }
   .login-card button { width:100%; }
+  /* ---------------- 移动端（≤640px）----------------
+     目标：字与控件不被缩小、输入框一行一个拉满、点按目标 ≥40px、长内容不横向溢出。
+     ⚠️ 输入相关字体必须 ≥16px —— iOS Safari 对 <16px 的输入框会在聚焦时自动放大页面。 */
+  @media (max-width: 640px) {
+    body { padding:12px; }
+    h1 { font-size:17px; margin:0 0 16px; flex-wrap:wrap; gap:8px; }
+    h1 .roomsel { order:9; flex:1 1 100%; width:100%; min-width:0; margin-left:0; font-size:14px; }
+    h1 .logout { padding:6px 10px; font-size:12.5px; }
+    h1 span[style] { display:none; }                 /* 标题里的占位 spacer 在换行布局下无意义 */
+    .sub { font-size:12.5px; margin-bottom:14px; }
+    .panel { gap:8px; margin-bottom:12px; }
+    .panel .fld, .panel .fld.grow { flex:1 1 100%; }  /* 字段一行一个（标签 + 拉满的输入） */
+    .panel .fld.grow input { min-width:0; }
+    .panel input.eq, .panel input.t, .panel input.xs { flex:1 1 auto; min-width:0; }
+    .panel input.eq { width:100%; }
+    /* Tag 与 ReNo 共用一行：Tag 撑满、ReNo 只保留自身宽度（数字框独占一行太浪费） */
+    .panel .fld.fld-tag { flex:1 1 110px; min-width:0; }
+    .panel .fld.fld-re { flex:0 0 auto; }
+    .panel .fld.fld-re input { flex:0 0 64px; }        /* 数字框保持窄（否则被上面的 flex:1 1 auto 拉宽） */
+    input, textarea#msg, .login-card input { font-size:16px; }   /* 防 iOS 聚焦自动放大 */
+    textarea#msg { height:104px; }
+    button { padding:12px 16px; min-height:44px; font-size:14px; }
+    #speakBtn, #updateBtn { flex:1 1 100%; }          /* 发言 / 刷新 各占一整行（拇指友好；发言为主） */
+    #autoRefreshLbl { flex:1 1 auto; }
+    .autots { flex:0 0 auto; align-self:center; }
+    /* 勾选组：整行三等分（避免被挤进 Tag 那一行） */
+    .chkrow { flex:1 1 100%; gap:6px; }
+    .chkrow label.chk { flex:1 1 0; padding:0 6px; min-height:40px; justify-content:center; font-size:12.5px; }
+    .chat { padding:14px; min-height:45vh; font-size:14px; border-radius:8px; }
+    .chat .blk-title { font-size:14.5px; gap:6px; }
+    .chat .blk-closed, .chat .blk-end { padding-left:9px; }
+    .chat table { display:block; width:100%; overflow-x:auto; }  /* 宽表格改为块内横滚，不撑破页面 */
+    .chat pre { max-width:100%; }
+    .chat .filterbar, .chat .archivebar { flex-wrap:wrap; gap:6px; }
+    .login-card { width:min(320px, 92vw); padding:20px 18px; }
+  }
+  /* 更窄的机器（≤380px）：再省一点留白，保证两个按钮仍并排 */
+  @media (max-width: 380px) {
+    body { padding:10px; }
+    h1 { font-size:16px; }
+    .chat { padding:10px; }
+    #speakBtn, #updateBtn { padding:12px 10px; }
+  }
 </style>
 </head>
 <body>
@@ -156,18 +203,21 @@
   </div>
   <!-- 第二行：Tag / ReNo / 勾选 / 按钮 -->
   <div class="panel">
-    <label class="fld"><span class="lbl">Tag</span><input id="session" class="t" type="text" list="taglist" autocomplete="off" readonly></label>
+    <label class="fld fld-tag"><span class="lbl">Tag</span><input id="session" class="t" type="text" list="taglist" autocomplete="off" readonly></label>
     <datalist id="taglist"></datalist>
-    <label class="fld"><span class="re-prefix" data-i18n="fld.reply">ReNo</span><input id="reply" class="xs" type="text" autocomplete="off" readonly></label>
-    <label class="chk" id="noTagLbl">
-      <input type="checkbox" id="noTag" checked> <span data-i18n="btn.plain">不带Tag</span>
-    </label>
-    <label class="chk">
-      <input type="checkbox" id="createTag"> <span data-i18n="fld.create">创建Tag</span>
-    </label>
-    <label class="chk">
-      <input type="checkbox" id="endTag"> <span data-i18n="fld.end">结束Tag</span>
-    </label>
+    <label class="fld fld-re"><span class="re-prefix" data-i18n="fld.reply">ReNo</span><input id="reply" class="xs" type="text" autocomplete="off" readonly></label>
+    <!-- 三个勾选「互斥」式一组：移动端整行三等分（见 .chkrow 媒体查询） -->
+    <div class="chkrow">
+      <label class="chk" id="noTagLbl">
+        <input type="checkbox" id="noTag" checked> <span data-i18n="btn.plain">不带Tag</span>
+      </label>
+      <label class="chk">
+        <input type="checkbox" id="createTag"> <span data-i18n="fld.create">创建Tag</span>
+      </label>
+      <label class="chk">
+        <input type="checkbox" id="endTag"> <span data-i18n="fld.end">结束Tag</span>
+      </label>
+    </div>
     <button type="button" id="speakBtn" data-i18n="speak">发言</button>
     <button type="button" id="updateBtn" data-i18n="update">刷新</button>
     <label class="chk" id="autoRefreshLbl">
