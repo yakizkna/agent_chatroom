@@ -113,6 +113,8 @@
   .chkrow { display:flex; align-items:center; gap:8px; flex:0 0 auto; }
   /* 「自动刷新」右侧的上次刷新时间（HH:MM:SS） */
   .autots { font-size:11px; color:var(--soft); font-variant-numeric:tabular-nums; }
+  /* 移动端悬浮「回顶部 / 写发言」按钮：默认不显示（桌面端保持无此按钮），滚动到一定深度才浮出 */
+  .totop { display:none; }
   .hint { color:var(--soft); font-size:12px; margin:8px 2px 0; }
   .err { color:var(--bad); }
   .ok { color:var(--ok); }
@@ -137,7 +139,7 @@
      目标：字与控件不被缩小、输入框一行一个拉满、点按目标 ≥40px、长内容不横向溢出。
      ⚠️ 输入相关字体必须 ≥16px —— iOS Safari 对 <16px 的输入框会在聚焦时自动放大页面。 */
   @media (max-width: 640px) {
-    body { padding:12px; }
+    body { padding:12px 12px 64px; }   /* 底部留白：滚到底时悬浮按钮不盖住最后一行 */
     h1 { font-size:17px; margin:0 0 16px; flex-wrap:wrap; gap:8px; }
     h1 .roomsel { order:9; flex:1 1 100%; width:100%; min-width:0; margin-left:0; font-size:14px; }
     h1 .logout { padding:6px 10px; font-size:12.5px; }
@@ -168,10 +170,21 @@
     .chat pre { max-width:100%; }
     .chat .filterbar, .chat .archivebar { flex-wrap:wrap; gap:6px; }
     .login-card { width:min(320px, 92vw); padding:20px 18px; }
+    /* 悬浮「↑ 写发言」：滚动 400px 后才浮出（.on 由 JS 切换）；避让 iPhone 底部横条 */
+    .totop {
+      display:inline-flex; align-items:center; gap:5px;
+      position:fixed; right:14px; bottom:calc(16px + env(safe-area-inset-bottom, 0px));
+      z-index:40; padding:11px 16px; border-radius:999px; font-size:13.5px;
+      background:#1f2632; color:var(--ink); border:1px solid var(--acc);
+      box-shadow:0 6px 18px rgba(0,0,0,.45);
+      opacity:0; pointer-events:none; transform:translateY(6px); transition:opacity .18s, transform .18s;
+    }
+    .totop b { font-size:15px; color:var(--acc); }
+    .totop.on { opacity:1; pointer-events:auto; transform:none; }
   }
   /* 更窄的机器（≤380px）：再省一点留白，保证两个按钮仍并排 */
   @media (max-width: 380px) {
-    body { padding:10px; }
+    body { padding:10px 10px 60px; }   /* 同样保留底部留白（此处会覆盖上一层媒体查询） */
     h1 { font-size:16px; }
     .chat { padding:10px; }
     #speakBtn, #updateBtn { padding:12px 10px; }
@@ -231,6 +244,9 @@
   <div class="hint" id="hint"></div>
   <div class="chat" id="box" data-i18n="loading">加载中…</div>
 
+  <!-- 移动端悬浮按钮：页面长时一键回到顶部并直接开始写（≤640px 才显示；见 .totop） -->
+  <button type="button" class="totop" id="toTop"><b>↑</b> <span data-i18n="btn.totop">写发言</span></button>
+
 <script>
 // ---- i18n：UI 框架中英切换（聊天内容本身来自 CHAT.md，不翻译）----
 var I18N = {
@@ -252,6 +268,7 @@ var I18N = {
     'hint.anchor.none': '未找到 %s —— 它可能在更早的归档里（本页只显示 CHAT.md 最近 100 条 + 最新一份归档）',
     'hi.refreshed': '已刷新', 'hi.refreshwitharch': '（含归档 %s）',
     'hi.autoon': '自动刷新已开启：每 %s 秒（页面切到后台时暂停）', 'hi.autooff': '自动刷新已关闭',
+    'btn.totop': '写发言', 'btn.totop.tip': '回到顶部并开始写发言（手机上滚动后浮出）',
     'hi.sent': '已发言', 'hi.filled': '已填充：%s',
     'hf.onlytag': '只看对话 %s（%s 条）', 'hf.clearing': '取消筛选',
     'hf.archive': '以下为归档 %s —— 更早的发言（CHAT.md 只留最近 100 条）',
@@ -293,6 +310,7 @@ var I18N = {
     'hint.anchor.none': '%s not found — it may be in an older archive (this page shows only the latest 100 blocks of CHAT.md plus the newest archive file)',
     'hi.refreshed': 'Refreshed', 'hi.refreshwitharch': ' (with archive %s)',
     'hi.autoon': 'Auto refresh on: every %s s (paused while the page is hidden)', 'hi.autooff': 'Auto refresh off',
+    'btn.totop': 'Compose', 'btn.totop.tip': 'Back to top and start composing (appears after scrolling on mobile)',
     'hi.sent': 'Posted', 'hi.filled': 'Filled: %s',
     'hf.onlytag': 'Only conversation %s (%s posts)', 'hf.clearing': 'Clear filter',
     'hf.archive': 'Older posts from archive %s (CHAT.md keeps only latest 100)',
@@ -347,6 +365,7 @@ function applyI18n(){
   roomSel && (roomSel.title = t('room.sel'));
   noTagLbl && (noTagLbl.title = t('btn.plain.tip'));
   ccLbl && (ccLbl.title = t('fld.cc.tip'));
+  toTop && (toTop.title = t('btn.totop.tip'));
   autoRefreshLbl && autoRefreshEnabled() && (autoRefreshLbl.title = t('btn.auto.tip', autoRefreshSec()));
 }
 function switchLang(){
@@ -1156,6 +1175,19 @@ if(!autoRefreshEnabled()){
   try{ autoRefresh.checked = localStorage.getItem(AUTO_REFRESH_KEY) === '1'; }catch(e){}
   syncAutoRefresh();
 }
+
+// ---- 移动端悬浮「↑ 写发言 / 回顶部」（≤640px 才显示；滚动 400px 后浮出）----
+// 长页面在手机上滚过输入区后，一键回到顶部并直接开始写（点完聚焦正文框）。
+// ⚠️ 与自动刷新是否开启无关（AUTO_REFRESH_SEC = 0 时这个按钮仍要能用）⇒ 放在顶层。
+var toTop = document.getElementById('toTop');
+function syncToTopBtn(){ if(toTop) toTop.classList.toggle('on', window.scrollY > 400); }
+window.addEventListener('scroll', syncToTopBtn, {passive:true});
+syncToTopBtn();
+toTop.addEventListener('click', function(){
+  window.scrollTo({top:0, behavior:'smooth'});
+  // 等滚动到位再聚焦，否则 iOS 会先把键盘弹起、页面跳动
+  setTimeout(function(){ try{ msg.focus({preventScroll:true}); }catch(e){ msg.focus(); } }, 320);
+});
 
 // 文件代理链接：浏览器对 <a> 导航不会附带 Authorization，直接点会 401。
 // 故在此拦截点击，用已登录的 JWT 取回内容后于新标签页打开（兼容私有仓库）。
