@@ -28,8 +28,9 @@
   .panel input.eq { flex:0 0 130px; min-width:0; }   /* 发件人 / 收件人 / 抄送：三者同宽 */
   .panel input.t  { flex:0 0 150px; min-width:0; }   /* Tag */
   .panel input.xs { flex:0 0 64px; min-width:0; }    /* Re 的编号数字（固定前缀「ReNo」见 .re-prefix）*/
-  .panel .re-prefix { flex:0 0 auto; align-self:center; color:#e3b341;
+  .panel .re-prefix { flex:0 0 auto; align-self:center; min-width:3em; text-align:right; color:#e3b341;
                       font-family:ui-monospace,Menlo,monospace; font-size:13px; user-select:none; }
+  /* ↑ min-width/右对齐与 .lbl 同款（ReNo 也是标签列的一员）⇒ 输入框与其它字段同列 */
   .panel .fld { display:inline-flex; align-items:center; gap:6px; flex:0 0 auto; }   /* 每个字段＝固定标签 + 输入框，和 Re: No 同款 */
   .panel .fld.grow { flex:1 1 auto; }                                              /* 主题：占满剩余行宽 */
   .panel .fld.grow input { flex:1 1 auto; min-width:160px; }
@@ -180,7 +181,7 @@
     .panel { gap:8px; margin-bottom:12px; }
     /* 标签列加宽到 4.3em（≈56px）：中文 3 字（39px）与英文最宽标签 Subject（55px）都能容纳
        ⇒ 两种语言的输入框左边缘都对齐（桌面端 3em 已够，见 .panel .lbl） */
-    .panel .lbl { min-width:4.3em; }
+    .panel .lbl, .panel .re-prefix { min-width:4.3em; }   /* ReNo 与其它标签同列（否则它的输入框比其它字段左移一格） */
     .panel .fld, .panel .fld.grow { flex:1 1 100%; }  /* 字段一行一个（标签 + 拉满的输入） */
     .panel .fld.grow input { min-width:0; }
     .panel input.eq, .panel input.t, .panel input.xs { flex:1 1 auto; min-width:0; }
