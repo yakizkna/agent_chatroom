@@ -129,13 +129,15 @@
   .chat .filterbar button { padding:3px 10px; font-size:12px; }
   label.chk { display:flex; align-items:center; gap:6px; white-space:nowrap; font-size:13px;
               color:var(--soft); cursor:pointer; border:1px solid var(--line);
-              border-radius:8px; padding:0 12px; }
+              border-radius:8px; padding:0 12px; align-self:center; }
+  /* ⚠️ align-self:center 必需：.panel 是 flex（默认 align-items:stretch）⇒ 与「发言/刷新」同处一行的
+     勾选项会被拉成按钮那么高（实测 24 → 41px），与 .chkrow 里的三个勾选（靠 align-items:center 保持 24px）不一致。 */
   label.chk:hover { border-color:var(--acc); }
   label.chk input { flex:none; margin:0; }
   /* 三个勾选（不带Tag / 创建Tag / 结束Tag）成组：桌面端保持原有并排宽度 */
   .chkrow { display:flex; align-items:center; gap:8px; flex:0 0 auto; }
   /* 「自动刷新」右侧的上次刷新时间（HH:MM:SS） */
-  .autots { font-size:11px; color:var(--soft); font-variant-numeric:tabular-nums; }
+  .autots { font-size:11px; color:var(--soft); font-variant-numeric:tabular-nums; align-self:center; }
   /* 移动端悬浮「回顶部 / 写发言」按钮：默认不显示（桌面端保持无此按钮），滚动到一定深度才浮出 */
   .totop { display:none; }
   .hint { color:var(--soft); font-size:12px; margin:8px 2px 0; }
@@ -191,11 +193,13 @@
     textarea#msg { height:104px; }
     button { padding:12px 16px; min-height:44px; font-size:14px; }
     #speakBtn, #updateBtn { flex:1 1 100%; }          /* 发言 / 刷新 各占一整行（拇指友好；发言为主） */
-    #autoRefreshLbl { flex:1 1 auto; }
-    .autots { flex:0 0 auto; align-self:center; }
-    /* 勾选组：整行三等分（避免被挤进 Tag 那一行） */
+    /* 四类勾选（不带Tag / 创建Tag / 结束Tag / 自动刷新）统一同款（2026-09-18 用户要求）：
+       40px 高、12.5px 字、内容居中 —— 原先「自动刷新」还是桌面那套 24px/13px/12px 内边距，明显不一样 */
+    label.chk { flex:1 1 0; padding:0 6px; min-height:40px; justify-content:center; font-size:12.5px; }
+    /* 勾选组：整行三等分（避免被挤进 Tag 那一行）；自动刷新独占剩余宽度，时间戳跟随其后 */
     .chkrow { flex:1 1 100%; gap:6px; }
-    .chkrow label.chk { flex:1 1 0; padding:0 6px; min-height:40px; justify-content:center; font-size:12.5px; }
+    #autoRefreshLbl { flex:1 1 auto; }
+    .autots { flex:0 0 auto; }
     .chat { padding:14px; min-height:45vh; font-size:14px; border-radius:8px; }
     .chat .blk-title { font-size:14.5px; gap:6px; }
     .chat .blk-closed, .chat .blk-end { padding-left:9px; }
