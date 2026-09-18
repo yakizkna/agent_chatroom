@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -173,5 +176,117 @@ func TestNormalizeChatSeps(t *testing.T) {
 	}
 	if n := len(chatBlockHeadRE.FindAllString(got, -1)); n != 2 {
 		t.Errorf("块数应保持 2，实际 %d", n)
+	}
+}
+
+// 归档改「批量」（2026-09-18 用户定）：`CHAT.md` 最多 200 条，**到达时一次搬走最旧的 ≈100 条**。
+// 关键回归：**101~200 条之间一律不动**（旧实现在 101 条就搬 1 条 ⇒ **每发一贴都要重写归档**）。
+func TestArchiveOverflowBatches(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "CHAT.md")
+	h := &ChatHandler{room: "t", dir: dir, file: file}
+
+	mk := func(hi, lo int) string { // 生成块（新 → 旧：hi 最新），块头形如 `# T No.<n>`
+		var sb strings.Builder
+		for n := hi; n >= lo; n-- {
+			fmt.Fprintf(&sb, "# T No.%d\n\n- 时间：2026-09-18 00:00:00\n- 收件人：所有人\n- 主题：t%d\n\nbody %d\n\n---\n\n---\n\n", n, n, n)
+		}
+		return sb.String()
+	}
+	count := func(p string) int {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return -1
+		}
+		return len(chatBlockHeadRE.FindAllString(string(b), -1))
+	}
+	// span 返回归档/主文件的「条数 + 编号区间」（批量后 `_<k>` 仍应按 No. 区间对齐）
+	span := func(p string) (int, int, int) {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return -1, -1, -1
+		}
+		var ns []int
+		for _, m := range regexp.MustCompile(`No\.(\d+)`).FindAllStringSubmatch(string(b), -1) {
+			var n int
+			fmt.Sscanf(m[1], "%d", &n)
+			ns = append(ns, n)
+		}
+		if len(ns) == 0 {
+			return 0, 0, 0
+		}
+		lo, hi := ns[0], ns[0]
+		for _, n := range ns {
+			if n < lo {
+				lo = n
+			}
+			if n > hi {
+				hi = n
+			}
+		}
+		return len(ns), lo, hi
+	}
+	arch1, arch2, arch3 := filepath.Join(dir, "CHAT_ARCHIVE_1.md"), filepath.Join(dir, "CHAT_ARCHIVE_2.md"), filepath.Join(dir, "CHAT_ARCHIVE_3.md")
+
+	// ① 201 条 ⇒ 触发批量：保留最新 100（No.102–201），一次搬走 101 条（No.1–100 → _1、No.101 → _2）
+	if err := os.WriteFile(file, []byte(mk(201, 1)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	touched, msg := h.archiveOverflow()
+	if msg != "" {
+		t.Fatalf("归档报错：%s", msg)
+	}
+	if len(touched) == 0 {
+		t.Fatal("201 条时应触发批量归档，实际没动")
+	}
+	if n, lo, hi := span(file); n != 100 || lo != 102 || hi != 201 {
+		t.Errorf("主文件应保留 100 条（No.102–201），实际 %d 条（No.%d–%d）", n, lo, hi)
+	}
+	if n, lo, hi := span(arch1); n != 100 || lo != 1 || hi != 100 {
+		t.Errorf("_1 应 100 条（No.1–100），实际 %d 条（No.%d–%d）", n, lo, hi)
+	}
+	if n, lo, hi := span(arch2); n != 1 || lo != 101 || hi != 101 {
+		t.Errorf("_2 应 1 条（No.101），实际 %d 条（No.%d–%d）", n, lo, hi)
+	}
+	kept, _ := os.ReadFile(file)
+	if !strings.Contains(string(kept), "No.201") || strings.Contains(string(kept), "No.101\n") {
+		t.Errorf("保留的应是 No.102–201（边界不符）")
+	}
+
+	// ② 101 条（相当于新发 1 贴）⇒ **不触发**（这就是「不再每贴重写归档」的保证）
+	one, _ := os.ReadFile(file)
+	if err := os.WriteFile(file, []byte(mk(202, 202)+string(one)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	a1before, _ := os.ReadFile(arch1)
+	if touched, msg = h.archiveOverflow(); msg != "" || touched != nil {
+		t.Errorf("101 条不应触发归档，实际 touched=%v msg=%q", touched, msg)
+	}
+	if a1after, _ := os.ReadFile(arch1); string(a1after) != string(a1before) {
+		t.Errorf("101 条时归档不应被改写")
+	}
+	if n := count(file); n != 101 {
+		t.Errorf("应保持 101 条，实际 %d", n)
+	}
+
+	// ③ 再加 100 条（共 201）⇒ 再触发一次批量：主文件回落 100，_1 保持不动，_2 收 No.101–202
+	cur, _ := os.ReadFile(file)
+	if err := os.WriteFile(file, []byte(mk(302, 203)+string(cur)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if touched, msg = h.archiveOverflow(); msg != "" || len(touched) == 0 {
+		t.Fatalf("201 条应再次触发批量，实际 touched=%v msg=%q", touched, msg)
+	}
+	if n, lo, hi := span(file); n != 100 || lo != 203 || hi != 302 {
+		t.Errorf("主文件应再次回落到 100 条（No.203–302），实际 %d 条（No.%d–%d）", n, lo, hi)
+	}
+	if n, lo, hi := span(arch2); n != 100 || lo != 101 || hi != 200 {
+		t.Errorf("_2 应补满为 100 条（No.101–200），实际 %d 条（No.%d–%d）", n, lo, hi)
+	}
+	if n, lo, hi := span(arch3); n != 2 || lo != 201 || hi != 202 {
+		t.Errorf("_3 应收 2 条（No.201–202），实际 %d 条（No.%d–%d）", n, lo, hi)
+	}
+	if a1after, _ := os.ReadFile(arch1); string(a1after) != string(a1before) {
+		t.Errorf("_1 已满，不应再被改写（批量归档的意义）")
 	}
 }

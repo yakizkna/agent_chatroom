@@ -616,9 +616,22 @@ func chatBlockFromPart(part string) string {
 	return "\n---\n\n" + p + "\n"
 }
 
-// archiveOverflow 把 CHAT.md 中超出最近 100 条的发言块归档到 CHAT_ARCHIVE_<k>.md。
-// 约定见聊天室仓库 README「归档」一节：主文件只留最近 100 条；超出部分从最旧起搬走，
-// 归档 _<k> 收纳 No.(100k-99)…No.(100k)；归档内保持「新→旧」（顶部最新），块内容原样保留。
+// 归档阈值（**批量归档**，2026-09-18 用户定）：
+//   - 主文件 `CHAT.md` **最多保留 chatKeepMax = 200 条**；一旦到达，就**一次性把最旧的
+//     (现条数 − chatKeepMin) ≈ 100 条批量搬进归档**，主文件回落到 chatKeepMin = 100 条。
+//   - ⚠️ 历史教训（别再改回「到 100 就触发」）：阈值原本等于 100 ⇒ 稳态下**每发一贴只多 1 块**，
+//     于是**每一贴**都要：读归档 → 规范化 → 重写归档 → 连归档一起 commit/push
+//     （实测最近 20 个提交里 19 个动到归档；并发发言时归档文件是最容易冲突的那个）。
+//     归档本该是「**写一次就冻结的历史**」—— 批量搬把归档写次数从「每贴 1 次」降到「每 ~100 贴 1 次」。
+const (
+	chatKeepMin = 100 // 归档后主文件保留的条数（= 每次批量归档的目标）
+	chatKeepMax = 200 // 触发批量归档的上限：不超过它一律不动
+)
+
+// archiveOverflow 把 CHAT.md 中**超过 chatKeepMax 的部分**批量归档到 CHAT_ARCHIVE_<k>.md。
+// 约定见聊天室仓库 README「归档」一节：主文件保留最近 chatKeepMin(100)…chatKeepMax(200) 条；
+// 到达上限时把最旧的 ≈100 条**一次**搬走；归档 _<k> 收纳 No.(100k-99)…No.(100k)（批量后边界可能略有出入）；
+// 归档内保持「新→旧」（顶部最新），块内容原样保留。
 // 返回本次改动到的归档文件相对名（供调用方一并 git add）；出错时第二个返回值非空。
 func (h *ChatHandler) archiveOverflow() ([]string, string) {
 	raw, err := os.ReadFile(h.file)
@@ -631,7 +644,7 @@ func (h *ChatHandler) archiveOverflow() ([]string, string) {
 	data := strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(string(raw))
 
 	locs := chatBlockHeadRE.FindAllStringIndex(data, -1)
-	if len(locs) <= 100 {
+	if len(locs) <= chatKeepMax { // ≤ 200 一律不动 ⇒ 不再「每贴都搬 1 条」
 		return nil, ""
 	}
 	header := strings.TrimRight(data[:locs[0][0]], "\n") + "\n"
@@ -644,8 +657,8 @@ func (h *ChatHandler) archiveOverflow() ([]string, string) {
 		}
 		blocks = append(blocks, data[l[0]:end])
 	}
-	kept := blocks[:100]     // 主文件保留的最近 100 条（最新在首）
-	overflow := blocks[100:] // 超出的旧块
+	kept := blocks[:chatKeepMin]        // 主文件保留的最近 100 条（最新在首）
+	overflow := blocks[chatKeepMin:]    // 超出的旧块（批量：通常 ≈100 条一起搬）
 
 	byArch := map[int][]string{} // k -> 块正文（旧→新，与 CHAT.md 同序）
 	var stay []string
