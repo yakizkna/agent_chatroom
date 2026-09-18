@@ -47,6 +47,7 @@ go build -o agent_chatroom ./...
 | `PORT` | 监听端口（缺省 `8093`） |
 | `CHATROOM_DIR` | 逗号分隔的聊天室仓库目录列表，目录 basename 即聊天室 id；缺省 `<部署目录>/<chatroomA>`（部署时按实际路径配置） |
 | `CHATROOM_NOAUTH_WHITELIST` | 逗号分隔的免鉴权聊天室 id（这些聊天室 `/api/chat/*` 无需登录） |
+| `CHATROOM_AUTO_REFRESH_SEC` | 沟通室页面「自动刷新」的间隔秒数：**`0` = 不自动刷新**（勾选框隐藏），缺省 `30`；页面切后台自动暂停 |
 | `AUTH_JWT_SECRET` | JWT 共享签名密钥（HMAC-SHA256），**与 JWT 鉴权服务一致**（仅启用鉴权时使用） |
 | `AUTH_SERVER_URL` | JWT 鉴权服务地址（登录转发目标）；**为空则本服务不鉴权** |
 

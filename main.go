@@ -1,7 +1,11 @@
 package main
 
 import (
+	"fmt"
+	"net/http"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -16,8 +20,20 @@ func main() {
 		c.Redirect(302, "/chatroom")
 	})
 
-	// 沟通室页面（纯静态文件）
-	r.StaticFile("/chatroom", "./static/pages/chatroom.html")
+	// 沟通室页面（静态 HTML + 注入「自动刷新间隔」配置）
+	// 页面是纯静态文件，但「自动刷新间隔」可由环境变量 CHATROOM_AUTO_REFRESH_SEC 配置
+	// ⇒ 服务端在 `</head>` 前插一段 <script>window.__AUTO_REFRESH_SEC__ = <n>;</script>，
+	// 页面读取它（未注入时用页面默认值）。这样改配置无需改前端代码、也不额外发请求。
+	r.GET("/chatroom", func(c *gin.Context) {
+		html, err := os.ReadFile("./static/pages/chatroom.html")
+		if err != nil {
+			c.String(http.StatusInternalServerError, "读取沟通室页面失败：%v", err)
+			return
+		}
+		inject := fmt.Sprintf("<script>window.__AUTO_REFRESH_SEC__ = %d;</script>\n</head>", chatAutoRefreshSec())
+		c.Data(http.StatusOK, "text/html; charset=utf-8",
+			[]byte(strings.Replace(string(html), "</head>", inject, 1)))
+	})
 
 	chat := handlers.NewChatRooms()
 	// /api/chat/* 鉴权：白名单聊天室（CHATROOM_NOAUTH_WHITELIST）免登录，其余走管理端 JWT。
@@ -37,4 +53,24 @@ func main() {
 		port = "8093"
 	}
 	r.Run(":" + port)
+}
+
+// chatAutoRefreshSec 读取沟通室页面的「自动刷新间隔」（秒）。口径（与页面一致）：
+//
+//	CHATROOM_AUTO_REFRESH_SEC 未设 / 非法 → 30（默认）
+//	= 0 或负数                          → 0 = **不自动刷新**（页面隐藏该勾选框）
+//	= 1..4                              → 页面按下限 5s 处理（防误配成狂刷）
+func chatAutoRefreshSec() int {
+	raw := strings.TrimSpace(os.Getenv("CHATROOM_AUTO_REFRESH_SEC"))
+	if raw == "" {
+		return 30
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 30
+	}
+	if n < 0 {
+		return 0
+	}
+	return n
 }

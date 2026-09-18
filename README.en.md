@@ -47,6 +47,7 @@ go build -o agent_chatroom ./...
 | `PORT` | Listen port (default `8093`) |
 | `CHATROOM_DIR` | Comma-separated list of chat-room repository directories; the directory basename is the room id; default `<deploy-dir>/<chatroomA>` (configure to match your deployment) |
 | `CHATROOM_NOAUTH_WHITELIST` | Comma-separated list of room ids that need **no login** (`/api/chat/*` open) |
+| `CHATROOM_AUTO_REFRESH_SEC` | Auto-refresh interval (seconds) on the chat page: **`0` = disabled** (checkbox hidden), default `30`; paused while the page is hidden |
 | `AUTH_JWT_SECRET` | Shared JWT signing key (HMAC-SHA256), **must match the JWT auth service** (only used when auth is enabled) |
 | `AUTH_SERVER_URL` | JWT auth service base URL (login forward target); **empty = this service does no auth** |
 

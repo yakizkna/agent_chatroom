@@ -290,7 +290,7 @@ function applyI18n(){
   // 房间下拉提示
   roomSel && (roomSel.title = t('room.sel'));
   noTagLbl && (noTagLbl.title = t('btn.plain.tip'));
-  autoRefreshLbl && (autoRefreshLbl.title = t('btn.auto.tip', autoRefreshSec()));
+  autoRefreshLbl && autoRefreshEnabled() && (autoRefreshLbl.title = t('btn.auto.tip', autoRefreshSec()));
 }
 function switchLang(){
   localStorage.setItem('chat_lang', curLang() === 'en' ? 'zh' : 'en');
@@ -1056,24 +1056,27 @@ msg.addEventListener('keydown', function(e){ if(e.key==='Enter' && (e.ctrlKey||e
 speakBtn.addEventListener('click', speak);
 updateBtn.addEventListener('click', update);
 
-// ---- 自动刷新（配置参数：AUTO_REFRESH_SEC —— 刷新间隔秒数，默认 30s）----
-// 勾选后每 N 秒拉一次最新发言；页面切到后台（document.hidden）自动暂停，回到前台补刷一次。
-// 间隔下限 5s（防把 AUTO_REFRESH_SEC 误配成 0/负数导致狂刷）；勾选状态记在 localStorage。
-var AUTO_REFRESH_SEC = 30;
+// ---- 自动刷新（配置参数：AUTO_REFRESH_SEC —— 刷新间隔秒数）----
+// AUTO_REFRESH_SEC：**> 0 = 间隔秒数（下限 5s，防误配成狂刷）；= 0（或负数）= 不自动刷新**（勾选框隐藏）。
+// 取值来源：服务端按环境变量 CHATROOM_AUTO_REFRESH_SEC 注入（见 main.go）；直接打开本文件时用默认 30。
+// 勾选后每 N 秒拉一次最新发言；页面切到后台（document.hidden）自动暂停，回到前台补刷一次；勾选状态记在 localStorage。
+var AUTO_REFRESH_SEC = (window.__AUTO_REFRESH_SEC__ != null) ? window.__AUTO_REFRESH_SEC__ : 30;
 var AUTO_REFRESH_KEY = 'chat_autorefresh';
 var autoTimer = null, autoBusy = false;
-function autoRefreshSec(){ return Math.max(5, Number(AUTO_REFRESH_SEC) || 30); }
+function autoRefreshEnabled(){ return Number(AUTO_REFRESH_SEC) > 0; }
+function autoRefreshSec(){ return autoRefreshEnabled() ? Math.max(5, Math.floor(Number(AUTO_REFRESH_SEC))) : 0; }
 function autoTick(){
-  if(!autoRefresh.checked || document.hidden || autoBusy) return;
+  if(!autoRefreshEnabled() || !autoRefresh.checked || document.hidden || autoBusy) return;
   if(updateBtn.disabled) return;   // 手动刷新 / 发言进行中 ⇒ 跳过本轮，不叠加请求
   update({auto:true});
 }
 function syncAutoRefresh(){
   if(autoTimer){ clearInterval(autoTimer); autoTimer = null; }
-  if(!autoRefresh.checked) return;
+  if(!autoRefreshEnabled() || !autoRefresh.checked) return;
   autoTimer = setInterval(autoTick, autoRefreshSec()*1000);
 }
 autoRefresh.addEventListener('change', function(){
+  if(!autoRefreshEnabled()) return;
   try{ localStorage.setItem(AUTO_REFRESH_KEY, autoRefresh.checked ? '1' : '0'); }catch(e){}
   syncAutoRefresh();
   if(autoRefresh.checked) setHint(t('hi.autoon', autoRefreshSec()), 'ok');
@@ -1082,8 +1085,15 @@ autoRefresh.addEventListener('change', function(){
 document.addEventListener('visibilitychange', function(){
   if(!document.hidden && autoRefresh.checked) autoTick();   // 回到前台补刷一次
 });
-try{ autoRefresh.checked = localStorage.getItem(AUTO_REFRESH_KEY) === '1'; }catch(e){}
-syncAutoRefresh();
+if(!autoRefreshEnabled()){
+  // CHATROOM_AUTO_REFRESH_SEC = 0 ⇒ 不自动刷新：隐藏勾选框与时间戳，并忽略本地记忆
+  autoRefreshLbl.style.display = 'none';
+  autoTs.style.display = 'none';
+  autoRefresh.checked = false;
+} else {
+  try{ autoRefresh.checked = localStorage.getItem(AUTO_REFRESH_KEY) === '1'; }catch(e){}
+  syncAutoRefresh();
+}
 
 // 文件代理链接：浏览器对 <a> 导航不会附带 Authorization，直接点会 401。
 // 故在此拦截点击，用已登录的 JWT 取回内容后于新标签页打开（兼容私有仓库）。
