@@ -163,14 +163,17 @@
      ⚠️ 输入相关字体必须 ≥16px —— iOS Safari 对 <16px 的输入框会在聚焦时自动放大页面。 */
   @media (max-width: 640px) {
     body { padding:12px 12px 64px; }   /* 底部留白：滚到底时悬浮按钮不盖住最后一行 */
-    h1 { font-size:17px; margin:0 0 16px; flex-wrap:wrap; gap:8px; }
-    /* 仓库下拉：独占一行拉满（长房名如 rollinace_open_chatroom 不被截断）、与输入框同高 44px 便于点按、
-       字号 16px（<16px 时 iOS 聚焦 select 同样会放大整页）。 */
-    h1 .roomsel { order:9; flex:1 1 100%; width:100%; min-width:0; margin:6px 0 2px; font-size:16px;
-                  min-height:44px; padding:10px 12px; }
+    /* 标题行与 PC 同构（用户 2026-09-18 要求）：沟通室 + 房间下拉**紧随其后**（不再另起一行），EN / 登出 靠右
+       · 下拉 font-size 保持 16px（<16px 时 iOS 聚焦会放大整页），用 zoom:.875 把视觉尺寸压到 ≈14px
+         ⇒ 24 字符长房名（rollinace_open_chatroom）在 390 屏也不截断
+       · flex:0 1 auto = 够宽保持自然宽度、不够才收缩；spacer 用 flex:1 把 EN / 登出 顶到最右 */
+    h1 { font-size:17px; margin:0 0 16px; flex-wrap:nowrap; gap:8px; }
+    h1 .roomsel { order:0; flex:0 1 auto; width:auto; min-width:0; margin:0; padding:9px 10px;
+                  font-size:16px; zoom:.875; }
     .panel .fld input { min-height:44px; }            /* 表单控件统一 44px（点按标准），与下拉等高 */
-    h1 .logout { padding:6px 10px; font-size:12.5px; }
-    h1 span[style] { display:none; }                 /* 标题里的占位 spacer 在换行布局下无意义 */
+    h1 > span[data-i18n] { flex:0 0 auto; white-space:nowrap; }   /* 标题不参与收缩（320 屏上否则会折成两行） */
+    h1 .logout { flex:0 0 auto; padding:6px 10px; font-size:12.5px; }
+    h1 span[style] { display:inline; flex:1 1 auto; }   /* 恢复占位 spacer：把 EN / 登出 顶到右侧 */
     .sub { font-size:12.5px; margin-bottom:14px; }
     .panel { gap:8px; margin-bottom:12px; }
     /* 标签列加宽到 4.3em（≈56px）：中文 3 字（39px）与英文最宽标签 Subject（55px）都能容纳
@@ -180,9 +183,9 @@
     .panel .fld.grow input { min-width:0; }
     .panel input.eq, .panel input.t, .panel input.xs { flex:1 1 auto; min-width:0; }
     .panel input.eq { width:100%; }
-    /* Tag 与 ReNo 共用一行：Tag 撑满、ReNo 只保留自身宽度（数字框独占一行太浪费） */
-    .panel .fld.fld-tag { flex:1 1 110px; min-width:0; }
-    .panel .fld.fld-re { flex:0 0 auto; }
+    /* Tag 独占一整行（用户 2026-09-18：原来与 ReNo 同行 ⇒ 输入框太短，Tag 名显示不全）；ReNo 另起一行 */
+    .panel .fld.fld-tag { flex:1 1 100%; min-width:0; }
+    .panel .fld.fld-re { flex:1 1 100%; }
     .panel .fld.fld-re input { flex:0 0 64px; }        /* 数字框保持窄（否则被上面的 flex:1 1 auto 拉宽） */
     input, select, textarea#msg, .login-card input { font-size:16px; }   /* 防 iOS 聚焦自动放大（select 同样会触发） */
     textarea#msg { height:104px; }
