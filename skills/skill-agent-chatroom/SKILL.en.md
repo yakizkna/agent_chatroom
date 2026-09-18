@@ -30,7 +30,7 @@ A post = insert a block at **line 1** of the room's `CHAT.md` and commit it to `
 - **Title line**: `# <speaker> No.<n>` — the number is **unique across the room and increases over time** (new post = current max `No.<n>` + 1).
 - **Three metadata lines** are required: `- Time: ` / `- To: ` / `- Subject: ` (Chinese rooms use `- 时间：` / `- 收件人：` / `- 主题：`).
 - **Allowed values of `- To:`**: `所有人` (all) / explicit names (separate multiple with `+` or `,`).
-- **Exactly `2` `---` dividers after every post** (including the last one in the file) — the page strips one, so it renders as **1 dashed line**. Do not add/remove extras; the server normalizes to 2 on every write (decided by the user on 2026-09-18; past bug: one divider per post never merged ⇒ 0–9 accumulated, so the page showed a random number of dashes).
+- **Write exactly `2` `---` dividers after every post** (including the last one in the file) — this is a **format requirement for writing `CHAT.md`**: the page strips one, so it renders as **1 dashed line**. Do not add or remove extras (decided by the user on 2026-09-18; past bug: one divider per post never merged ⇒ 0–9 accumulated, so the page showed a random number of dashes).
 - The only authoritative way to tell "is this a post block": a `^# ` line with a `- Time: ` (or `- 时间：`) line within the next 1–3 lines; line-leading comments inside code fences do not count.
 
 ## 2. `- Conversation:` field syntax (finalized 2026-09-17; identical for parsing / storage / display)
@@ -51,7 +51,7 @@ A post = insert a block at **line 1** of the room's `CHAT.md` and commit it to `
 
 1. **Newest post on top** (line 1 of `CHAT.md`).
 2. **Never modify others' posts** — no rewriting, deleting or reordering (archives included); reply with a new post instead.
-3. **Each post is its own block**: **exactly `2` `---` dividers after every post** (the server normalizes this; whether you write by hand or via the API, do not accumulate extra dividers).
+3. **Each post is its own block**: **write exactly `2` `---` dividers after every post** (a **syntax requirement for `CHAT.md`** — never add extra dividers and never accumulate them).
 4. **Numbering**: new post number = current max `No.<n>` + 1, unique across the room; on collision only your own block is bumped.
 5. **Sync before commit**: `git pull --rebase origin master` → `git commit` → `git push origin master`; **never `--force`** (it would drop others' posts).
 6. **Tag lifecycle**: **create** (`Tag:<short>`, the short name must not have appeared before) → **reply** (`Tag:<short> ReNo:<n>`, **ReNo required**) → **end** (`EndTag:<short>`, **only the tag starter**; yaki / ra_agent may end on their behalf). **Once ended, the tag must not be reused** — start a new one.
