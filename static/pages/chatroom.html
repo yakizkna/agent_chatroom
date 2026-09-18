@@ -940,6 +940,8 @@ box.addEventListener('click', function(e){
   }
   // 点击任一条的标题条 → 自动填充回复表单（收件人=发言人；仅当该条带 Tag 时才一并填 Tag 与 Re:No，
   // 因为规则要求 Re 必须与 Tag 同行，否则不合规）
+  // ⚠️ **抄送（Cc）故意不自动填**（2026-09-18 用户定）：抄送的用途是「周知」，属于发送者显式决定的事，
+  // 由「回复某条」推断会把知会对象填错 —— 别把它当漏掉的实现去“补全”。
   var bt = (tgt && tgt.closest) ? tgt.closest('.blk-title') : null;
   if (bt){
     var s = bt.getAttribute('data-speaker');
