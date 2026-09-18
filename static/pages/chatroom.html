@@ -37,6 +37,25 @@
      ⇒ 所有输入框左边缘落在同一列，且「标签 → 输入框」的间隔一律 6px（用户 2026-09-18 要求）。 */
   .panel .lbl { flex:0 0 auto; min-width:3em; text-align:right; color:#e3b341; font-family:ui-monospace,Menlo,monospace;
                 font-size:13px; user-select:none; white-space:nowrap; }
+  /* 「收件人 / 抄送」历史输入：▾ 按钮（仅当有历史时出现）+ 下拉快选（发言成功后自动记录，最近 8 条） */
+  .panel .fld { position:relative; }                 /* 历史菜单的定位参考 */
+  .panel .hist { display:none; flex:0 0 auto; align-self:stretch; margin-left:2px; padding:0 8px;
+                 background:#1f2632; color:var(--soft); border:1px solid var(--line); border-radius:8px;
+                 cursor:pointer; font-size:11px; line-height:1; }
+  .panel .hist.on { display:inline-flex; align-items:center; }   /* 有历史才出现 */
+  .panel .hist:hover { border-color:var(--acc); color:var(--ink); }
+  .panel .histmenu { position:absolute; z-index:30; top:calc(100% + 4px); right:0; min-width:190px;
+                     max-width:min(320px, 86vw); max-height:min(50vh, 320px); overflow:auto;
+                     background:#171a21; border:1px solid var(--line); border-radius:8px;
+                     box-shadow:0 10px 26px rgba(0,0,0,.55); padding:4px;
+                     display:flex; flex-direction:column; gap:2px; }
+  .panel .histmenu[hidden] { display:none; }
+  .panel .histmenu .hi { display:block; width:100%; text-align:left; padding:9px 10px; border:0;
+                         background:transparent; color:var(--ink); font-size:13px; border-radius:6px;
+                         cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .panel .histmenu .hi:hover { background:#222834; color:#fff; }
+  .panel .histmenu .hi.clr { color:var(--soft); font-size:12px; margin-top:2px;
+                             border-top:1px solid var(--line); border-radius:0 0 6px 6px; }
   .panel .row { display:flex; gap:12px; margin-bottom:12px; }
   .panel .row .wide { flex:1; }
   input, textarea#msg { flex:1; background:#0b0d12; color:var(--ink); border:1px solid var(--line);
@@ -221,8 +240,8 @@
   <!-- 第一行：发件人 / 收件人 / 抄送（三者同宽）+ 主题 -->
   <div class="panel">
     <label class="fld"><span class="lbl" data-i18n="fld.from">发件人</span><input id="from" class="eq" type="text" autocomplete="off"></label>
-    <label class="fld"><span class="lbl" data-i18n="fld.to">收件人</span><input id="to" class="eq" type="text" autocomplete="off"></label>
-    <label class="fld" id="ccLbl"><span class="lbl" data-i18n="fld.cc">抄送</span><input id="cc" class="eq" type="text" autocomplete="off"></label>
+    <label class="fld"><span class="lbl" data-i18n="fld.to">收件人</span><input id="to" class="eq" type="text" autocomplete="off"><button type="button" class="hist" id="toHist" aria-haspopup="listbox" aria-expanded="false">▾</button><span class="histmenu" id="toMenu" hidden></span></label>
+    <label class="fld" id="ccLbl"><span class="lbl" data-i18n="fld.cc">抄送</span><input id="cc" class="eq" type="text" autocomplete="off"><button type="button" class="hist" id="ccHist" aria-haspopup="listbox" aria-expanded="false">▾</button><span class="histmenu" id="ccMenu" hidden></span></label>
     <label class="fld grow"><span class="lbl" data-i18n="fld.subject">主题</span><input id="subject" type="text" autocomplete="off"></label>
   </div>
   <!-- 第二行：Tag / ReNo / 勾选 / 按钮 -->
@@ -271,6 +290,7 @@ var I18N = {
     'btn.plain': '不带Tag', 'btn.plain.tip': '本条不带对话 Tag（不写「对话：」行）：与「创建Tag」「结束Tag」三态互斥；点某条发言的标题会自动取消（转为回复该条）',
     'speak': '发言', 'update': '刷新', 'loading': '加载中…',
     'btn.auto': '自动刷新', 'btn.auto.tip': '每 %s 秒自动拉取最新发言；页面切到后台时暂停，回到前台立即补刷一次',
+    'hist.tip': '历史输入：点这里快选（发言成功后自动记录最近 8 条）', 'hist.clear': '清空历史',
     'ph.from': '发件人自定义', 'ph.to': '所有人', 'ph.subject': '留空取正文首行', 'ph.session': '默认只读：点上一条标题自动填；勾选「创建Tag」后可填新短名（如 cup-quota-0917）',
     'ph.reply': '编号', 'ph.msg': '输入要说的话，Ctrl/⌘+回车 发送…',
     'hi.reading': '读取中…', 'hi.pulling': '正在 pull 最新发言…', 'hi.sending': '正在发送并 push…',
@@ -314,6 +334,7 @@ var I18N = {
     'btn.plain': 'No Tag', 'btn.plain.tip': 'Post without a conversation tag (no "Conversation:" line). Mutually exclusive with "New Tag" / "End Tag"; clicking a post title cancels it (switches to replying to that post)',
     'speak': 'Post', 'update': 'Refresh', 'loading': 'Loading…',
     'btn.auto': 'Auto refresh', 'btn.auto.tip': 'Pull the latest posts every %s s; paused while the page is hidden, one catch-up refresh when you return',
+    'hist.tip': 'Recent entries: click to pick (last 8 saved after each successful post)', 'hist.clear': 'Clear history',
     'ph.from': 'Custom sender', 'ph.to': 'Everyone', 'ph.subject': 'Leave empty to use first line', 'ph.session': 'Read-only by default: click a post title to fill; check "New Tag" to type a new short name',
     'ph.reply': 'No.', 'ph.msg': 'Type your message, Ctrl/⌘+Enter to send…',
     'hi.reading': 'Loading…', 'hi.pulling': 'Pulling latest posts…', 'hi.sending': 'Posting and pushing…',
@@ -376,6 +397,7 @@ function applyI18n(){
   roomSel && (roomSel.title = t('room.sel'));
   noTagLbl && (noTagLbl.title = t('btn.plain.tip'));
   ccLbl && (ccLbl.title = t('fld.cc.tip'));
+  histRender('to'); histRender('cc');   // 历史下拉的「清空历史」文案 / ▾ 提示 随语言切换
   toTop && (toTop.title = t('btn.totop.tip'));
   autoRefreshLbl && autoRefreshEnabled() && (autoRefreshLbl.title = t('btn.auto.tip', autoRefreshSec()));
 }
@@ -485,6 +507,76 @@ var noTagLbl = document.getElementById('noTagLbl');
 var taglist = document.getElementById('taglist');
 var logoutBtn = document.getElementById('logoutBtn');
 var roomSel = document.getElementById('roomSel');
+
+// ---- 「收件人 / 抄送」历史输入（2026-09-18 用户要求：保存历史输入，方便快速选择）----
+// 发言成功后才记录当次的值（去重、新的在前、最多 HIST_MAX 条），存 localStorage（只在本浏览器，不上传）。
+// 字段右侧的 ▾ 按钮**只在该字段有历史时出现**，点开列出最近值 → 单击即填入；底部提供「清空历史」。
+var HIST_MAX = 8;
+function histKey(id){ return 'chat_hist_' + id; }
+function histEls(id){
+  return { inp: document.getElementById(id), btn: document.getElementById(id + 'Hist'),
+           menu: document.getElementById(id + 'Menu') };
+}
+function histLoad(id){
+  try{
+    var a = JSON.parse(localStorage.getItem(histKey(id)) || '[]');
+    return Array.isArray(a) ? a.filter(function(x){ return typeof x === 'string' && x.trim(); }).slice(0, HIST_MAX) : [];
+  }catch(e){ return []; }
+}
+function histPush(id, v){
+  v = (v || '').trim();
+  if(!v) return;                                               // 抄送留空是常态：空值不入历史
+  var a = histLoad(id).filter(function(x){ return x !== v; });
+  a.unshift(v);
+  try{ localStorage.setItem(histKey(id), JSON.stringify(a.slice(0, HIST_MAX))); }catch(e){}
+  histRender(id);
+}
+function histClear(id){
+  try{ localStorage.removeItem(histKey(id)); }catch(e){}
+  histRender(id);
+}
+function histClose(id){
+  var e = histEls(id);
+  if(!e.menu) return;
+  e.menu.hidden = true;
+  e.btn.setAttribute('aria-expanded', 'false');
+}
+function histCloseAll(){ ['to','cc'].forEach(histClose); }
+function histRender(id){
+  var e = histEls(id);
+  if(!e.menu) return;
+  var a = histLoad(id);
+  if(e.btn) e.btn.title = t('hist.tip');
+  if(e.btn) e.btn.classList.toggle('on', a.length > 0);         // 无历史 ⇒ 不显示 ▾（不占位）
+  e.menu.innerHTML = '';
+  if(!a.length){ histClose(id); return; }
+  a.forEach(function(v){
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'hi'; b.textContent = v; b.title = v;
+    b.addEventListener('click', function(){ e.inp.value = v; histClose(id); });
+    e.menu.appendChild(b);
+  });
+  var c = document.createElement('button');
+  c.type = 'button'; c.className = 'hi clr'; c.textContent = t('hist.clear');
+  c.addEventListener('click', function(){ histClear(id); });
+  e.menu.appendChild(c);
+}
+['to','cc'].forEach(function(id){
+  var e = histEls(id);
+  if(!e.btn) return;
+  e.btn.addEventListener('click', function(){
+    var wasOpen = !e.menu.hidden;
+    histCloseAll();
+    if(!wasOpen){ e.menu.hidden = false; e.btn.setAttribute('aria-expanded', 'true'); }
+  });
+});
+// 点字段/菜单之外、或按 Esc ⇒ 收起（同时只开一个）
+document.addEventListener('click', function(ev){
+  if(ev.target && ev.target.closest && ev.target.closest('.panel .fld')) return;
+  histCloseAll();
+});
+document.addEventListener('keydown', function(ev){ if(ev.key === 'Escape') histCloseAll(); });
+histRender('to'); histRender('cc');
 
 // 用后端返回的聊天室列表渲染下拉框；选中项缺失时回退到首个聊天室。
 function renderRooms(list, cur){
@@ -1139,7 +1231,8 @@ function speak(){
                               reply: short ? reply.value.trim() : '',
                               create: isCreate, lang: curLang()})})
     .then(r=>r.json()).then(function(j){
-      if(j.ok){ msg.value=''; reply.value=''; cc.value=''; endTag.checked=false; createTag.checked=false; plainPost=true; syncPlainChk(); syncTagInputs(); setHint(t('hi.sent'),'ok'); localStorage.setItem('chat_from', from.value.trim()); load(); }
+      if(j.ok){ histPush('to', to.value); histPush('cc', cc.value);   // 发言成功才记历史（先记后清空 cc）
+                msg.value=''; reply.value=''; cc.value=''; endTag.checked=false; createTag.checked=false; plainPost=true; syncPlainChk(); syncTagInputs(); setHint(t('hi.sent'),'ok'); localStorage.setItem('chat_from', from.value.trim()); load(); }
       else setHint(j.error||t('err.speakfail'),'err');
     }).catch(e=>{ if(e.message!=='unauthorized') setHint(t('err.reqfail')+e,'err'); }).finally(()=>busy(false));
 }
