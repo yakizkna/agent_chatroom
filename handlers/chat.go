@@ -754,7 +754,8 @@ func truncateRune(s string, n int) string {
 
 // Speak 把输入格式化后插入 CHAT.md 最上方，commit 并 push 到 origin/master。
 // 返回 (ok, contentOrErr, warnings)。
-func (h *ChatHandler) Speak(content, from, to, subject, session, reply, lang string, create bool) (bool, string, []string) {
+func (h *ChatHandler) Speak(content, from, to, cc, subject, session, reply, lang string, create bool) (bool, string, []string) {
+	// cc = 抄送（可选，邮件语义：知会，一般不需回应）；非空时在「收件人」之后多写一行 `- 抄送：`。
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return false, "内容为空", nil
@@ -806,8 +807,11 @@ func (h *ChatHandler) Speak(content, from, to, subject, session, reply, lang str
 		no := chatMaxNo(blocks) + 1
 		now := time.Now().UTC().Add(8 * time.Hour).Format("2006-01-02 15:04:05") // 北京时间（UTC+8）
 		meta := []string{lab("- 时间：", "- Time: ") + now,
-			lab("- 收件人：", "- To: ") + to,
-			lab("- 主题：", "- Subject: ") + subject}
+			lab("- 收件人：", "- To: ") + to}
+		if cc = strings.TrimSpace(cc); cc != "" { // 抄送：可选，紧跟收件人（邮件语义：知会）
+			meta = append(meta, lab("- 抄送：", "- Cc: ")+cc)
+		}
+		meta = append(meta, lab("- 主题：", "- Subject: ")+subject)
 		if sessionLine != "" {
 			meta = append(meta, sessionLine)
 		}
@@ -1001,8 +1005,8 @@ func (cr *ChatRooms) Update(c *gin.Context) {
 // Speak POST /api/chat/speak?room=<id> —— 向所选聊天室发言（写 CHAT.md 并 push）。
 func (cr *ChatRooms) SpeakHTTP(c *gin.Context) {
 	var req struct {
-		Content, From, To, Subject, Session, Reply, Lang string
-		Create                                           bool // 「创建 Tag」勾选（该短名必须不存在）
+		Content, From, To, Cc, Subject, Session, Reply, Lang string
+		Create                                              bool // 「创建 Tag」勾选（该短名必须不存在）
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "invalid request"})
@@ -1015,7 +1019,7 @@ func (cr *ChatRooms) SpeakHTTP(c *gin.Context) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	ok, contentOrErr, warns := h.Speak(req.Content, req.From, req.To, req.Subject, req.Session, req.Reply, req.Lang, req.Create)
+	ok, contentOrErr, warns := h.Speak(req.Content, req.From, req.To, req.Cc, req.Subject, req.Session, req.Reply, req.Lang, req.Create)
 	if !ok {
 		c.JSON(http.StatusOK, gin.H{"ok": false, "error": contentOrErr})
 		return
