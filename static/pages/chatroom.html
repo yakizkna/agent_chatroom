@@ -108,6 +108,8 @@
               border-radius:8px; padding:0 12px; }
   label.chk:hover { border-color:var(--acc); }
   label.chk input { flex:none; margin:0; }
+  /* 「自动刷新」右侧的上次刷新时间（HH:MM:SS） */
+  .autots { font-size:11px; color:var(--soft); font-variant-numeric:tabular-nums; }
   .hint { color:var(--soft); font-size:12px; margin:8px 2px 0; }
   .err { color:var(--bad); }
   .ok { color:var(--ok); }
@@ -164,6 +166,10 @@
     </label>
     <button type="button" id="speakBtn" data-i18n="speak">发言</button>
     <button type="button" id="updateBtn" data-i18n="update">刷新</button>
+    <label class="chk" id="autoRefreshLbl">
+      <input type="checkbox" id="autoRefresh"> <span data-i18n="btn.auto">自动刷新</span>
+    </label>
+    <span class="autots" id="autoTs"></span>
   </div>
   <div class="panel">
     <textarea id="msg"></textarea>
@@ -182,6 +188,7 @@ var I18N = {
     'fld.from': '发件人', 'fld.to': '收件人', 'fld.subject': '主题', 'fld.create': '创建Tag', 'fld.end': '结束Tag', 'fld.reply': 'ReNo',
     'btn.plain': '不带Tag', 'btn.plain.tip': '本条不带对话 Tag（不写「对话：」行）：与「创建Tag」「结束Tag」三态互斥；点某条发言的标题会自动取消（转为回复该条）',
     'speak': '发言', 'update': '刷新', 'loading': '加载中…',
+    'btn.auto': '自动刷新', 'btn.auto.tip': '每 %s 秒自动拉取最新发言；页面切到后台时暂停，回到前台立即补刷一次',
     'ph.from': '发件人自定义', 'ph.to': '所有人', 'ph.subject': '留空取正文首行', 'ph.session': '默认只读：点上一条标题自动填；勾选「创建Tag」后可填新短名（如 cup-quota-0917）',
     'ph.reply': '编号', 'ph.msg': '输入要说的话，Ctrl/⌘+回车 发送…',
     'hi.reading': '读取中…', 'hi.pulling': '正在 pull 最新发言…', 'hi.sending': '正在发送并 push…',
@@ -189,6 +196,7 @@ var I18N = {
     // 跳转/深链找不到目标编号时的提示（目标可能落在更早、未显示的归档里）
     'hint.anchor.none': '未找到 %s —— 它可能在更早的归档里（本页只显示 CHAT.md 最近 100 条 + 最新一份归档）',
     'hi.refreshed': '已刷新', 'hi.refreshwitharch': '（含归档 %s）',
+    'hi.autoon': '自动刷新已开启：每 %s 秒（页面切到后台时暂停）', 'hi.autooff': '自动刷新已关闭',
     'hi.sent': '已发言', 'hi.filled': '已填充：%s',
     'hf.onlytag': '只看对话 %s（%s 条）', 'hf.clearing': '取消筛选',
     'hf.archive': '以下为归档 %s —— 更早的发言（CHAT.md 只留最近 100 条）',
@@ -221,12 +229,14 @@ var I18N = {
     'fld.from': 'From', 'fld.to': 'To', 'fld.subject': 'Subject', 'fld.create': 'New Tag', 'fld.end': 'End Tag', 'fld.reply': 'ReNo',
     'btn.plain': 'No Tag', 'btn.plain.tip': 'Post without a conversation tag (no "Conversation:" line). Mutually exclusive with "New Tag" / "End Tag"; clicking a post title cancels it (switches to replying to that post)',
     'speak': 'Post', 'update': 'Refresh', 'loading': 'Loading…',
+    'btn.auto': 'Auto refresh', 'btn.auto.tip': 'Pull the latest posts every %s s; paused while the page is hidden, one catch-up refresh when you return',
     'ph.from': 'Custom sender', 'ph.to': 'Everyone', 'ph.subject': 'Leave empty to use first line', 'ph.session': 'Read-only by default: click a post title to fill; check "New Tag" to type a new short name',
     'ph.reply': 'No.', 'ph.msg': 'Type your message, Ctrl/⌘+Enter to send…',
     'hi.reading': 'Loading…', 'hi.pulling': 'Pulling latest posts…', 'hi.sending': 'Posting and pushing…',
     'hi.read': 'Read CHAT.md of %s (repo: %s)%s', 'hi.arch': ' + archive %s',
     'hint.anchor.none': '%s not found — it may be in an older archive (this page shows only the latest 100 blocks of CHAT.md plus the newest archive file)',
     'hi.refreshed': 'Refreshed', 'hi.refreshwitharch': ' (with archive %s)',
+    'hi.autoon': 'Auto refresh on: every %s s (paused while the page is hidden)', 'hi.autooff': 'Auto refresh off',
     'hi.sent': 'Posted', 'hi.filled': 'Filled: %s',
     'hf.onlytag': 'Only conversation %s (%s posts)', 'hf.clearing': 'Clear filter',
     'hf.archive': 'Older posts from archive %s (CHAT.md keeps only latest 100)',
@@ -280,6 +290,7 @@ function applyI18n(){
   // 房间下拉提示
   roomSel && (roomSel.title = t('room.sel'));
   noTagLbl && (noTagLbl.title = t('btn.plain.tip'));
+  autoRefreshLbl && (autoRefreshLbl.title = t('btn.auto.tip', autoRefreshSec()));
 }
 function switchLang(){
   localStorage.setItem('chat_lang', curLang() === 'en' ? 'zh' : 'en');
@@ -372,6 +383,9 @@ var hint = document.getElementById('hint');
 var box = document.getElementById('box');
 var speakBtn = document.getElementById('speakBtn');
 var updateBtn = document.getElementById('updateBtn');
+var autoRefresh = document.getElementById('autoRefresh');       // 「自动刷新」勾选
+var autoRefreshLbl = document.getElementById('autoRefreshLbl');
+var autoTs = document.getElementById('autoTs');                 // 上次自动刷新时间（HH:MM:SS）
 var session = document.getElementById('session');
 var reply = document.getElementById('reply');
 var endTag = document.getElementById('endTag');
@@ -990,17 +1004,25 @@ function load(){
   }).catch(e=>{ if(e.message!=='unauthorized') setHint(t('err.reqfail')+e,'err'); }).finally(()=>busy(false));
 }
 
-function update(){
-  busy(true); setHint(t('hi.pulling'),'spinner');
-  apiFetch('/api/chat/update' + roomQuery(), {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
+function update(opts){
+  var auto = !!(opts && opts.auto);   // 自动刷新：不闪烁按钮、不刷「正在 pull」提示、不打扰表单
+  if(auto){ if(autoBusy) return; autoBusy = true; }
+  else { busy(true); setHint(t('hi.pulling'),'spinner'); }
+  return apiFetch('/api/chat/update' + roomQuery(), {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
     .then(r=>r.json()).then(function(j){
       if(j.ok){
         renderRooms(j.rooms, j.room);
-        show(j.content, (j.note||t('hi.refreshed')) + (j.archive ? t('hi.refreshwitharch', j.archiveName) : ''),
-             j.archive, j.archiveName);
+        if(auto){
+          show(j.content, null, j.archive, j.archiveName);              // 静默换内容
+          autoTs.textContent = new Date().toTimeString().slice(0,8);    // 上次自动刷新时间 HH:MM:SS
+        } else {
+          show(j.content, (j.note||t('hi.refreshed')) + (j.archive ? t('hi.refreshwitharch', j.archiveName) : ''),
+               j.archive, j.archiveName);
+        }
       }
       else setHint(j.error||t('err.updfail'),'err');
-    }).catch(e=>{ if(e.message!=='unauthorized') setHint(t('err.reqfail')+e,'err'); }).finally(()=>busy(false));
+    }).catch(e=>{ if(e.message!=='unauthorized') setHint(t('err.reqfail')+e,'err'); })
+      .finally(()=>{ if(auto) autoBusy = false; else busy(false); });
 }
 
 function speak(){
@@ -1033,6 +1055,35 @@ function speak(){
 msg.addEventListener('keydown', function(e){ if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); speak(); } });
 speakBtn.addEventListener('click', speak);
 updateBtn.addEventListener('click', update);
+
+// ---- 自动刷新（配置参数：AUTO_REFRESH_SEC —— 刷新间隔秒数，默认 30s）----
+// 勾选后每 N 秒拉一次最新发言；页面切到后台（document.hidden）自动暂停，回到前台补刷一次。
+// 间隔下限 5s（防把 AUTO_REFRESH_SEC 误配成 0/负数导致狂刷）；勾选状态记在 localStorage。
+var AUTO_REFRESH_SEC = 30;
+var AUTO_REFRESH_KEY = 'chat_autorefresh';
+var autoTimer = null, autoBusy = false;
+function autoRefreshSec(){ return Math.max(5, Number(AUTO_REFRESH_SEC) || 30); }
+function autoTick(){
+  if(!autoRefresh.checked || document.hidden || autoBusy) return;
+  if(updateBtn.disabled) return;   // 手动刷新 / 发言进行中 ⇒ 跳过本轮，不叠加请求
+  update({auto:true});
+}
+function syncAutoRefresh(){
+  if(autoTimer){ clearInterval(autoTimer); autoTimer = null; }
+  if(!autoRefresh.checked) return;
+  autoTimer = setInterval(autoTick, autoRefreshSec()*1000);
+}
+autoRefresh.addEventListener('change', function(){
+  try{ localStorage.setItem(AUTO_REFRESH_KEY, autoRefresh.checked ? '1' : '0'); }catch(e){}
+  syncAutoRefresh();
+  if(autoRefresh.checked) setHint(t('hi.autoon', autoRefreshSec()), 'ok');
+  else { autoTs.textContent = ''; setHint(t('hi.autooff'), ''); }
+});
+document.addEventListener('visibilitychange', function(){
+  if(!document.hidden && autoRefresh.checked) autoTick();   // 回到前台补刷一次
+});
+try{ autoRefresh.checked = localStorage.getItem(AUTO_REFRESH_KEY) === '1'; }catch(e){}
+syncAutoRefresh();
 
 // 文件代理链接：浏览器对 <a> 导航不会附带 Authorization，直接点会 401。
 // 故在此拦截点击，用已登录的 JWT 取回内容后于新标签页打开（兼容私有仓库）。
