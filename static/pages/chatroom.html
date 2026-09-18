@@ -31,7 +31,9 @@
   .panel .fld { display:inline-flex; align-items:center; gap:6px; flex:0 0 auto; }   /* 每个字段＝固定标签 + 输入框，和 Re: No 同款 */
   .panel .fld.grow { flex:1 1 auto; }                                              /* 主题：占满剩余行宽 */
   .panel .fld.grow input { flex:1 1 auto; min-width:160px; }
-  .panel .lbl { flex:0 0 auto; color:#e3b341; font-family:ui-monospace,Menlo,monospace;
+  /* 标签列固定宽（3em = 三个中文字宽）：发件人/收件人（3 字）与抄送/主题（2 字）右侧对齐
+     ⇒ 所有输入框左边缘落在同一列，且「标签 → 输入框」的间隔一律 6px（用户 2026-09-18 要求）。 */
+  .panel .lbl { flex:0 0 auto; min-width:3em; text-align:right; color:#e3b341; font-family:ui-monospace,Menlo,monospace;
                 font-size:13px; user-select:none; white-space:nowrap; }
   .panel .row { display:flex; gap:12px; margin-bottom:12px; }
   .panel .row .wide { flex:1; }
@@ -120,7 +122,7 @@
   .ok { color:var(--ok); }
   .spinner { color:var(--acc); }
   /* 标题行（含房间下拉与登出） */
-  h1 .roomsel { width:auto; min-width:150px; }
+  h1 .roomsel { width:auto; min-width:200px; }   /* 桌面：给最长的房名（rollinace_open_chatroom ≈146px + 内边距/箭头）留足余量，避免贴边 */
   h1 .logout { text-decoration:none; color:var(--soft); font-size:13px;
                padding:4px 12px; border:1px solid var(--line); border-radius:8px; }
   h1 .logout:hover { color:var(--ink); border-color:var(--acc); }
@@ -141,11 +143,17 @@
   @media (max-width: 640px) {
     body { padding:12px 12px 64px; }   /* 底部留白：滚到底时悬浮按钮不盖住最后一行 */
     h1 { font-size:17px; margin:0 0 16px; flex-wrap:wrap; gap:8px; }
-    h1 .roomsel { order:9; flex:1 1 100%; width:100%; min-width:0; margin-left:0; font-size:14px; }
+    /* 仓库下拉：独占一行拉满（长房名如 rollinace_open_chatroom 不被截断）、加高到 44px 便于点按、
+       字号提到 16px —— 与输入框同规格（<16px 时 iOS 聚焦 select 同样会放大整页）。 */
+    h1 .roomsel { order:9; flex:1 1 100%; width:100%; min-width:0; margin:6px 0 2px; font-size:16px;
+                  min-height:44px; padding:10px 12px; }
     h1 .logout { padding:6px 10px; font-size:12.5px; }
     h1 span[style] { display:none; }                 /* 标题里的占位 spacer 在换行布局下无意义 */
     .sub { font-size:12.5px; margin-bottom:14px; }
     .panel { gap:8px; margin-bottom:12px; }
+    /* 标签列加宽到 4.3em（≈56px）：中文 3 字（39px）与英文最宽标签 Subject（55px）都能容纳
+       ⇒ 两种语言的输入框左边缘都对齐（桌面端 3em 已够，见 .panel .lbl） */
+    .panel .lbl { min-width:4.3em; }
     .panel .fld, .panel .fld.grow { flex:1 1 100%; }  /* 字段一行一个（标签 + 拉满的输入） */
     .panel .fld.grow input { min-width:0; }
     .panel input.eq, .panel input.t, .panel input.xs { flex:1 1 auto; min-width:0; }
@@ -154,7 +162,7 @@
     .panel .fld.fld-tag { flex:1 1 110px; min-width:0; }
     .panel .fld.fld-re { flex:0 0 auto; }
     .panel .fld.fld-re input { flex:0 0 64px; }        /* 数字框保持窄（否则被上面的 flex:1 1 auto 拉宽） */
-    input, textarea#msg, .login-card input { font-size:16px; }   /* 防 iOS 聚焦自动放大 */
+    input, select, textarea#msg, .login-card input { font-size:16px; }   /* 防 iOS 聚焦自动放大（select 同样会触发） */
     textarea#msg { height:104px; }
     button { padding:12px 16px; min-height:44px; font-size:14px; }
     #speakBtn, #updateBtn { flex:1 1 100%; }          /* 发言 / 刷新 各占一整行（拇指友好；发言为主） */
