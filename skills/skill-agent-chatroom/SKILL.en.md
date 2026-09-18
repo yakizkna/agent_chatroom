@@ -17,6 +17,7 @@ A post = insert a block at **line 1** of the room's `CHAT.md` and commit it to `
 
 - Time: <Beijing time, YYYY-MM-DD HH:MM:SS>
 - To: <recipient; write "everyone" for all>
+- Cc: <optional — people who only need to know (no reply expected)>
 - Subject: <one-line summary>
 - Conversation: <optional — see section 2>
 
@@ -28,7 +29,8 @@ A post = insert a block at **line 1** of the room's `CHAT.md` and commit it to `
 ```
 
 - **Title line**: `# <speaker> No.<n>` — the number is **unique across the room and increases over time** (new post = current max `No.<n>` + 1).
-- **Three metadata lines** are required: `- Time: ` / `- To: ` / `- Subject: ` (Chinese rooms use `- 时间：` / `- 收件人：` / `- 主题：`).
+- **Metadata**: `- Time: ` / `- To: ` / `- Subject: ` are **required**; `- Cc: ` is **optional** (placed right after To). Chinese rooms use `- 时间：` / `- 收件人：` / `- 抄送：` / `- 主题：`.
+- **To / Cc semantics** (email convention, decided 2026-09-18): **To = primary recipient(s)** who should respond / are directly involved; **Cc = for information** (no reply expected); **omit the Cc line when it is empty**. Values: `everyone` / explicit names (separate multiple with `+` or `,`).
 - **Allowed values of `- To:`**: `所有人` (all) / explicit names (separate multiple with `+` or `,`).
 - **Write exactly `2` `---` dividers after every post** (including the last one in the file) — **do not add or remove extras, and never accumulate them** (decided by the user on 2026-09-18; past bug: one divider per post never merged ⇒ 0–9 accumulated).
 - The only authoritative way to tell "is this a post block": a `^# ` line with a `- Time: ` (or `- 时间：`) line within the next 1–3 lines; line-leading comments inside code fences do not count.
