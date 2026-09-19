@@ -122,11 +122,6 @@
                      background:#141a26; border:1px solid var(--line); border-radius:8px;
                      font-size:12.5px; color:var(--soft); }
   .chat .filterbar code { background:none; border:0; color:var(--acc); padding:0; }
-  /* 归档分隔条：以下为「上一页」的发言（CHAT.md 只留最近 100 条，2026-09-16 起页面一并展示最新归档） */
-  .chat .archivebar { display:flex; align-items:center; gap:8px; margin:24px 0 12px; padding:8px 12px;
-                      background:#1b1510; border:1px dashed #6b5033; border-radius:8px;
-                      font-size:12.5px; color:#d9b382; }
-  .chat .archivebar code { background:none; border:0; color:#f0c48a; padding:0; }
   .chat .filterbar button { padding:3px 10px; font-size:12px; }
   label.chk { display:flex; align-items:center; gap:6px; white-space:nowrap; font-size:13px;
               color:var(--soft); cursor:pointer; border:1px solid var(--line);
@@ -207,7 +202,7 @@
     .chat .blk-closed, .chat .blk-end { padding-left:9px; }
     .chat table { display:block; width:100%; overflow-x:auto; }  /* 宽表格改为块内横滚，不撑破页面 */
     .chat pre { max-width:100%; }
-    .chat .filterbar, .chat .archivebar { flex-wrap:wrap; gap:6px; }
+    .chat .filterbar { flex-wrap:wrap; gap:6px; }
     .login-card { width:min(320px, 92vw); padding:20px 18px; }
     /* 悬浮「↑ 写发言」：滚动 400px 后才浮出（.on 由 JS 切换）；避让 iPhone 底部横条 */
     .totop {
@@ -307,15 +302,14 @@ var I18N = {
     'ph.reply': '编号', 'ph.msg': '输入要说的话，Ctrl/⌘+回车 发送…',
     'ph.msg.touch': '输入要说的话…',   // ≤640px（触屏）：键盘没有 Ctrl/⌘ ⇒ 不提示快捷键
     'hi.reading': '读取中…', 'hi.pulling': '正在 pull 最新发言…', 'hi.sending': '正在发送并 push…',
-    'hi.read': '已读取 %s 的 CHAT.md（仓库：%s）%s', 'hi.arch': ' + 归档 %s',
-    // 跳转/深链找不到目标编号时的提示（目标可能落在更早、未显示的归档里）
-    'hint.anchor.none': '未找到 %s —— 它可能在更早的归档里（本页只显示 CHAT.md 最近 100 条 + 最新一份归档）',
-    'hi.refreshed': '已刷新', 'hi.refreshwitharch': '（含归档 %s）',
+    'hi.read': '已读取 %s 的 CHAT.md（仓库：%s）',
+    // 跳转/深链找不到目标编号时的提示（2026-09-19 起页面只读 CHAT.md，不再拼接归档）
+    'hint.anchor.none': '未找到 %s —— 它可能在更早的发言里（本页只显示 CHAT.md 最近 100 条）',
+    'hi.refreshed': '已刷新',
     'hi.autoon': '自动刷新已开启：每 %s 秒（页面切到后台时暂停）', 'hi.autooff': '自动刷新已关闭',
     'btn.totop': '写发言', 'btn.totop.tip': '回到顶部并开始写发言（手机上滚动后浮出）',
     'hi.sent': '已发言', 'hi.filled': '已填充：%s',
     'hf.onlytag': '只看对话 %s（%s 条）', 'hf.clearing': '取消筛选',
-    'hf.archive': '以下为归档 %s —— 更早的发言（CHAT.md 只留最近 100 条）',
     'tb.fill': '点击自动填充：收件人 / Tag / ReNo', 'tg.click': '点击只看该对话',
     'err.empty': '内容为空，先输入要说的话', 'err.speaker': '请填写发件人', 'err.readfail': '读取失败', 'err.updfail': '刷新失败', 'err.speakfail': '发言失败',
     'err.reqfail': '请求失败：', 'err.openfile': '打开文件失败：',
@@ -353,14 +347,13 @@ var I18N = {
     'ph.reply': 'No.', 'ph.msg': 'Type your message, Ctrl/⌘+Enter to send…',
     'ph.msg.touch': 'Type your message…',   // ≤640px (touch): no Ctrl/Cmd key on mobile keyboards
     'hi.reading': 'Loading…', 'hi.pulling': 'Pulling latest posts…', 'hi.sending': 'Posting and pushing…',
-    'hi.read': 'Read CHAT.md of %s (repo: %s)%s', 'hi.arch': ' + archive %s',
-    'hint.anchor.none': '%s not found — it may be in an older archive (this page shows only the latest 100 blocks of CHAT.md plus the newest archive file)',
-    'hi.refreshed': 'Refreshed', 'hi.refreshwitharch': ' (with archive %s)',
+    'hi.read': 'Read CHAT.md of %s (repo: %s)',
+    'hint.anchor.none': '%s not found — it may be in older posts (this page shows only the latest 100 blocks of CHAT.md)',
+    'hi.refreshed': 'Refreshed',
     'hi.autoon': 'Auto refresh on: every %s s (paused while the page is hidden)', 'hi.autooff': 'Auto refresh off',
     'btn.totop': 'Compose', 'btn.totop.tip': 'Back to top and start composing (appears after scrolling on mobile)',
     'hi.sent': 'Posted', 'hi.filled': 'Filled: %s',
     'hf.onlytag': 'Only conversation %s (%s posts)', 'hf.clearing': 'Clear filter',
-    'hf.archive': 'Older posts from archive %s (CHAT.md keeps only latest 100)',
     'tb.fill': 'Click to autofill: To / Tag / ReNo', 'tg.click': 'Click to view this conversation only',
     'err.empty': 'Message is empty', 'err.speaker': 'Please enter the sender', 'err.readfail': 'Read failed', 'err.updfail': 'Refresh failed', 'err.speakfail': 'Post failed',
     'err.reqfail': 'Request failed: ', 'err.openfile': 'Failed to open file: ',
@@ -821,8 +814,6 @@ function render(md){
 }
 
 var rawMd = '';        // 最近一次的 CHAT.md 原文
-var rawArchive = '';   // 最新一份归档（CHAT_ARCHIVE_<k>.md）原文 —— 接在 rawMd 之后展示（2026-09-16 用户定）
-var archiveName = '';  // 上述归档的文件名（用于分隔条文案）
 var filterTag = '';    // 「只看某会话」的标签（'' = 全部）
 var closedTags = {};   // 已结束（End）的标签 —— 按规则不可再引用
 var lastAutoTag = '', lastAutoReply = '', lastAutoTo = '';   // 上次自动回填的缺省值（避免覆盖用户手输）
@@ -1029,20 +1020,11 @@ function applyDefault(p){
   reply.placeholder = maxNo ? String(maxNo) : t('ph.reply');
 }
 
-// CHAT.md + 最新归档的**合并视图**：页面展示与规则判定都基于它
-// （与后端 parseBlocks 跨归档一致 —— 取号 / 会话 End 状态 / 回应目标都跨页成立）。
+// 只解析 `CHAT.md`（2026-09-19 用户定：页面只读 CHAT.md —— 主文件保底 ≥100 条 ⇒ 不再拼接归档）。
+// 与后端一致（`parseBlocks` 亦只读主文件）：取号 / 会话 End 状态 / 回应目标都基于主文件。
 function allParsed(){
   var a = parseChat(rawMd);
-  var b = rawArchive ? parseChat(rawArchive) : { pre: '', blocks: [] };
-  return { pre: a.pre, blocks: a.blocks.concat(b.blocks) };
-}
-
-// 归档段 HTML（分隔条 + 归档全部块）；无归档时为空串
-function archiveHtml(filter, total){
-  if (!rawArchive) return '';
-  return '<div class="archivebar">' + t('hf.archive', '<code>' + esc(archiveName) + '</code>') +
-         '</div>' +
-         renderChat(rawArchive, filter, { skipHead: true, noFilterBar: true, filterCount: total });
+  return { pre: a.pre, blocks: a.blocks };
 }
 
 function paint(){
@@ -1056,7 +1038,7 @@ function paint(){
   });
   taglist.innerHTML = opts.join('');
   var fTotal = filterTag ? p.blocks.filter(function(b){ return b.tag === filterTag; }).length : 0;
-  box.innerHTML = renderChat(rawMd, filterTag, { filterCount: fTotal }) + archiveHtml(filterTag, fTotal);
+  box.innerHTML = renderChat(rawMd, filterTag, { filterCount: fTotal });
   applyDefault(p);
 }
 
@@ -1117,10 +1099,8 @@ function scrollToHash(){
   setHint(t('hint.anchor.none', 'No.' + h.replace(/^no-/, '')), 'err');
 }
 
-function show(content, note, archive, archName){
+function show(content, note){
   rawMd = content;
-  rawArchive = archive || '';
-  archiveName = archName || '';
   paint();
   // ⚠️ 顺序：先出「已读取…」的常规提示，再跑深链跳转 —— 否则「找不到该编号」的提示会被它覆盖
   if(note) setHint(note, 'ok');
@@ -1223,9 +1203,7 @@ function load(){
       renderRooms(j.rooms, j.room);
       // 免鉴权白名单聊天室：无登录概念，隐藏「登出」（有 token 进入时也隐藏，避免误导）
       if (logoutBtn) logoutBtn.style.display = (j.noauth) ? 'none' : '';
-      show(j.content, t('hi.read', (j.room || ''), (j.repo || ''),
-                      j.archive ? t('hi.arch', j.archiveName) : ''),
-           j.archive, j.archiveName);
+      show(j.content, t('hi.read', (j.room || ''), (j.repo || '')));
     }
     else setHint(j.error||t('err.readfail'),'err');
   }).catch(e=>{ if(e.message!=='unauthorized') setHint(t('err.reqfail')+e,'err'); }).finally(()=>busy(false));
@@ -1240,11 +1218,10 @@ function update(opts){
       if(j.ok){
         renderRooms(j.rooms, j.room);
         if(auto){
-          show(j.content, null, j.archive, j.archiveName);              // 静默换内容
+          show(j.content, null);              // 静默换内容
           autoTs.textContent = new Date().toTimeString().slice(0,8);    // 上次自动刷新时间 HH:MM:SS
         } else {
-          show(j.content, (j.note||t('hi.refreshed')) + (j.archive ? t('hi.refreshwitharch', j.archiveName) : ''),
-               j.archive, j.archiveName);
+          show(j.content, (j.note||t('hi.refreshed')));
         }
       }
       else setHint(j.error||t('err.updfail'),'err');

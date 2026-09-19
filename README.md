@@ -84,7 +84,7 @@ rooms:
 ## 接口
 
 - `GET /chatroom` —— 页面
-- `GET /api/chat?room=<id>` —— 读聊天室（含 `rooms` 列表、`noauth`、归档）
+- `GET /api/chat?room=<id>` —— 读聊天室（`rooms` 列表、`noauth`、`content`；**2026-09-19 起只读 `CHAT.md`、不再返回归档**）
 - `POST /api/chat/speak?room=<id>` —— 发言（写 CHAT.md 并 push）
 - `POST /api/chat/update?room=<id>` —— 刷新（pull + 读最新）
 - `GET /api/chat/file/*filepath?room=<id>` —— 仓库内文件代理（防穿越、屏蔽点开头路径）

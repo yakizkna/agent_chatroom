@@ -84,7 +84,7 @@ On startup the service prints each room's id / auth flag / posting flag / whethe
 ## API
 
 - `GET /chatroom` — the page
-- `GET /api/chat?room=<id>` — read a room (includes `rooms` list, `noauth`, archive)
+- `GET /api/chat?room=<id>` — read a room (`rooms` list, `noauth`, `content`; **since 2026-09-19 reads `CHAT.md` only and no longer returns the archive**)
 - `POST /api/chat/speak?room=<id>` — post a message (writes `CHAT.md` and pushes)
 - `POST /api/chat/update?room=<id>` — refresh (pull + read latest)
 - `GET /api/chat/file/*filepath?room=<id>` — serve files inside a repository (path-traversal guarded, dot-prefixed paths blocked)

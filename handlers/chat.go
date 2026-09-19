@@ -219,21 +219,18 @@ func (h *ChatHandler) git(args ...string) (int, string) {
 
 // ---- 解析（与 Python _chat_files / _chat_blocks 对齐）----
 
+// chatFiles 返回**要解析的聊天文件**。
+// 2026-09-19 用户定：**只读 `CHAT.md`** —— 主文件由归档保底保留 ≥100 条（`archiveOverflow`：>chatKeepMax
+// 时一次性搬走最旧 ~100 条）⇒ 唤醒与页面所需的「最新发言 / 最新 Tag / 最近 10 条」、以及取号
+// （最大 `No.` 就在主文件顶部）都在其中，**不必再跨归档解析**（早前为「取号 / End 状态 / 回应目标
+// 跨页成立」而扫全部归档，现已不需要）。
+// ⚠️ 归档能力本身仍在：`archiveOverflow`（服务端发言路径）、命令行 `agent_chatroom archive`、
+// `ra_tasks/room_archive` 定期任务 —— 只是「读」不再碰归档。
 func (h *ChatHandler) chatFiles() []string {
-	var files []string
 	if fi, err := os.Stat(h.file); err == nil && !fi.IsDir() {
-		files = append(files, h.file)
+		return []string{h.file}
 	}
-	entries, err := os.ReadDir(h.dir)
-	if err == nil {
-		for _, e := range entries {
-			n := e.Name()
-			if e.Type().IsRegular() && strings.HasPrefix(n, "CHAT_ARCHIVE_") && strings.HasSuffix(n, ".md") {
-				files = append(files, filepath.Join(h.dir, n))
-			}
-		}
-	}
-	return files
+	return nil
 }
 
 func (h *ChatHandler) parseBlocks() []chatBlock {
@@ -797,6 +794,9 @@ func (h *ChatHandler) latestArchive() string {
 // readArchive 返回最新一份归档的 (文件名, 全文)；沟通室页面把它接在 CHAT.md 之后展示，
 // 于是**一次就能看到「最近 100 条 + 上一页 100 条」**（用户 2026-09-16 定：不用再翻归档文件）。
 // 无归档或读取失败时返回 ("", "")（页面只显示 CHAT.md，不影响可用性）。
+// readArchive 读「最新一份归档」全文（name, content）。
+// ⚠️ 2026-09-19 用户定：接口/页面**只读 `CHAT.md`** ⇒ 已无调用方；保留备查（日后要做归档检索可直接复用），
+// 归档编号规则见技能规则 8（`_<k>` 收纳 `No.(100k−99)…No.(100k)`）。
 func (h *ChatHandler) readArchive() (string, string) {
 	name := h.latestArchive()
 	if name == "" {
@@ -1028,13 +1028,10 @@ func (cr *ChatRooms) GetChat(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err})
 		return
 	}
-	// 同时给出「最新一份归档」的全文：页面把两页拼在一起渲染，省去人工翻归档。
-	archiveName, archive := h.readArchive()
+	// 2026-09-19 用户定：接口/页面**只读 CHAT.md**（保底 ≥100 条）⇒ 不再返回「最新一份归档」全文。
 	c.JSON(http.StatusOK, gin.H{
 		"ok":          true,
 		"content":     content,
-		"archive":     archive,
-		"archiveName": archiveName,
 		"repo":        "yakizkna/" + h.room,
 		"chatroomDir": h.dir,
 		"room":        h.room,
@@ -1062,9 +1059,9 @@ func (cr *ChatRooms) Update(c *gin.Context) {
 	if rc != 0 {
 		note = "pull 失败：" + out
 	}
-	archiveName, archive := h.readArchive()
+	// 2026-09-19 用户定：接口/页面**只读 CHAT.md** ⇒ 刷新接口同样不再返回归档。
 	c.JSON(http.StatusOK, gin.H{"ok": true, "content": content, "note": note,
-		"archive": archive, "archiveName": archiveName, "room": h.room, "rooms": cr.roomList()})
+		"room": h.room, "rooms": cr.roomList()})
 }
 
 // Speak POST /api/chat/speak?room=<id> —— 向所选聊天室发言（写 CHAT.md 并 push）。
