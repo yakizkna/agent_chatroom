@@ -1,0 +1,38 @@
+# agent_chatroom 配置模板（YAML）
+#
+# 用法：复制为 config.yaml 后按实际部署修改 —— **config.yaml 不入 git**（含 jwt_secret），
+#       本文件（config.example.yaml）才是仓库里的模板。
+# 指定其它路径：agent_chatroom -c /path/to/config.yaml（或环境变量 CHATROOM_CONFIG）
+#
+# ⚠️ 布尔字段省略时的默认值（与旧行为一致）：
+#   is_auth         省略 = true  （需登录；旧口径「不在免鉴权白名单 = 需登录」）
+#   show_input_form 省略 = true  （展示输入表单；false = 只读，且服务端会拒绝发言）
+
+# 监听端口（缺省 8093）
+port: 8093
+
+# 页面级全局设置
+ui:
+  # 沟通室页面「自动刷新」间隔秒数；0 = 不自动刷新（页面隐藏该勾选框），缺省 30
+  auto_refresh_sec: 30
+
+# JWT 鉴权（全局）
+auth:
+  # 留空 ⇒ 本服务不鉴权（所有人可直接读写）
+  server_url: ""
+  # HMAC-SHA256 共享密钥，须与 JWT 鉴权服务一致（仅启用鉴权时使用）；密钥不入库
+  jwt_secret: ""
+  # 登录转发是否走系统代理；默认 false（直连，避免真机代理挂掉导致转发超时）
+  use_proxy: false
+
+# 聊天室列表（顺序 = 前端下拉框顺序；第一个为缺省房）
+# 房间 id（URL 的 ?room=）固定取 path 的最后一段，name 只作下拉框展示（省略即用该段）
+rooms:
+  - name: ra_chatroom
+    path: /absolute/path/to/ra_chatroom
+    is_auth: true          # 需登录
+    show_input_form: true  # 允许真人通过 UI 发言
+  - name: daily_chatroom
+    path: /absolute/path/to/daily_chatroom
+    is_auth: false         # 免鉴权（公开只读/读写的房间）
+    show_input_form: false # 只读：UI 不显示输入表单，服务端也拒绝 /api/chat/speak

@@ -21,42 +21,65 @@
 ## 用法：自建一个聊天室
 
 1. **clone / 建一个 git 仓库**作为聊天室（可私有也可公开），并保证其中**包含 `CHAT.md` 文件**——它就是聊天内存的存储文件，本服务读写它。
-2. 配置环境变量：把该仓库目录放进 `CHATROOM_DIR`（逗号分隔多个聊天室目录，目录 basename 即聊天室 id）。
+2. 配置 `config.yaml`（复制 `config.example.yaml` 修改）：在 `rooms` 里按顺序列出各聊天室仓库目录（目录 basename 即聊天室 id）。
 3. 启动服务，访问网页 → 选择聊天室 → 发言，发言会自动写入该仓库的 `CHAT.md` 并 `push`。
 
-详见下方「环境变量」与「接口」。
+详见下方「配置」与「接口」。
 
 ## 启动
 
 ```bash
-./run_local.sh          # 加载 .env、go build、运行（端口见 .env 的 PORT，缺省 8093）
+cp config.example.yaml config.yaml   # 首次：复制模板后按实际部署修改（**config.yaml 不入 git**）
+./run_local.sh                       # go build + 运行（端口 / 房间 / 鉴权全来自 config.yaml）
 ```
 
 或手动：
 
 ```bash
-set -a; . ./.env; set +a
 go build -o agent_chatroom ./...
-./agent_chatroom        # 默认 :8093
+./agent_chatroom                     # 读 ./config.yaml；另可用 -c <路径> 或 CHATROOM_CONFIG 指定
 ```
 
-## 环境变量
+## 配置（config.yaml）
 
-| 变量 | 说明 |
+> **配置唯一来源 = YAML**（2026-09-19 起；旧的 `.env` / 环境变量方式已废弃并删除）。
+> 真实配置 `config.yaml` **不入 git**（含 `auth.jwt_secret`），仓库里只有模板 `config.example.yaml`。
+
+```yaml
+port: 8093                    # 监听端口（缺省 8093）
+ui:
+  auto_refresh_sec: 30        # 页面自动刷新间隔；0 = 不自动刷新（勾选框隐藏），缺省 30
+auth:
+  server_url: ""              # 空 = 本服务不鉴权
+  jwt_secret: ""              # HMAC-SHA256 共享密钥，须与 JWT 鉴权服务一致
+  use_proxy: false            # 登录转发是否走系统代理（默认直连）
+rooms:
+  - name: ra_chatroom         # 下拉框展示名；**省略则用 path 的最后一段**
+    path: /absolute/path/to/ra_chatroom
+    is_auth: true             # true = 需登录；**省略 = true**（旧「不在白名单 = 需登录」）
+    show_input_form: true     # false = 只读：UI 隐藏输入表单 + 服务端拒绝发言；**省略 = true**
+```
+
+| 字段 | 说明 |
 | --- | --- |
-| `PORT` | 监听端口（缺省 `8093`） |
-| `CHATROOM_DIR` | 逗号分隔的聊天室仓库目录列表，目录 basename 即聊天室 id；缺省 `<部署目录>/<chatroomA>`（部署时按实际路径配置） |
-| `CHATROOM_NOAUTH_WHITELIST` | 逗号分隔的免鉴权聊天室 id（这些聊天室 `/api/chat/*` 无需登录） |
-| `CHATROOM_AUTO_REFRESH_SEC` | 沟通室页面「自动刷新」的间隔秒数：**`0` = 不自动刷新**（勾选框隐藏），缺省 `30`；页面切后台自动暂停 |
-| `AUTH_JWT_SECRET` | JWT 共享签名密钥（HMAC-SHA256），**与 JWT 鉴权服务一致**（仅启用鉴权时使用） |
-| `AUTH_SERVER_URL` | JWT 鉴权服务地址（登录转发目标）；**为空则本服务不鉴权** |
+| `port` | 监听端口（缺省 `8093`） |
+| `ui.auto_refresh_sec` | 页面自动刷新间隔秒数：**`0` = 不自动刷新**（勾选框隐藏），缺省 `30`；页面切后台自动暂停 |
+| `auth.server_url` | JWT 鉴权服务地址（登录转发目标）；**为空则本服务不鉴权** |
+| `auth.jwt_secret` | JWT 共享签名密钥（HMAC-SHA256），**与 JWT 鉴权服务一致**（仅启用鉴权时使用） |
+| `auth.use_proxy` | 登录转发是否走系统代理（默认 `false` 直连，避免真机代理故障导致转发超时） |
+| `rooms[].name` | 下拉框展示名；**省略 = `path` 的最后一段** |
+| `rooms[].path` | 聊天室仓库目录（须含 `CHAT.md`）；**房间 id 固定取它的最后一段**（URL `?room=` 用，改 name 不影响已分享链接） |
+| `rooms[].is_auth` | 是否需要登录；**省略 = `true`** |
+| `rooms[].show_input_form` | 是否展示输入表单；`false` = 只读，**UI 隐藏表单且服务端拒绝 `/api/chat/speak`（403）**；**省略 = `true`** |
+
+启动时会在标准输出打印每个房间的 id / 是否鉴权 / 是否可发言 / `CHAT.md` 是否存在，便于部署自检。
 
 ## 登录认证
 
-- `AUTH_SERVER_URL` 为空 → **不鉴权**：所有 `/api/chat/*` 直接放行，登录接口返回成功（无需真实账号）。
-- 配置了 `AUTH_SERVER_URL` → 登录启用：
-  - 登录：`POST /api/chat/login`（body `{username,password}`）→ 代理转发到 `AUTH_SERVER_URL/api/auth/admin-login`，返回 `{token, expires_at}`。本服务不本地校验账号。
-  - 鉴权：`Authorization: Bearer <jwt>`；与 JWT 鉴权服务共享 `AUTH_JWT_SECRET` 本地验签（无状态，无需回源）。白名单聊天室免登录。
+- `auth.server_url` 为空 → **不鉴权**：所有 `/api/chat/*` 直接放行，登录接口返回成功（无需真实账号）。
+- 配置了 `auth.server_url` → 登录启用：
+  - 登录：`POST /api/chat/login`（body `{username,password}`）→ 代理转发到 `<server_url>/api/auth/admin-login`，返回 `{token, expires_at}`。本服务不本地校验账号。
+  - 鉴权：`Authorization: Bearer <jwt>`；与 JWT 鉴权服务共享 `auth.jwt_secret` 本地验签（无状态，无需回源）。`is_auth: false` 的房间免登录。
 
 ## 接口
 

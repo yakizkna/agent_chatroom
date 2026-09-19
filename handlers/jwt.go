@@ -1,14 +1,17 @@
 package handlers
 
 import (
-	"os"
-
 	"github.com/golang-jwt/jwt/v5"
+
+	"agent_chatroom/config"
 )
 
-// jwtSecret 读取共享密钥（AUTH_JWT_SECRET）。
+// jwtSecret 读取共享密钥（配置 auth.jwt_secret）。
 func jwtSecret() []byte {
-	return []byte(os.Getenv("AUTH_JWT_SECRET"))
+	if c := config.Get(); c != nil {
+		return []byte(c.Auth.JWTSecret)
+	}
+	return nil
 }
 
 // VerifyAdminJWT 校验 JWT，返回用户名与是否有效。

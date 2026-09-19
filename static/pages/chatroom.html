@@ -281,6 +281,8 @@
     <textarea id="msg"></textarea>
   </div>
   <div class="hint" id="hint"></div>
+  <!-- 只读房间的说明（独立元素：#hint 会被「已读取…」占用，避免互相覆盖） -->
+  <div class="hint" id="readonlyHint"></div>
   <div class="chat" id="box" data-i18n="loading">加载中…</div>
 
   <!-- 移动端悬浮按钮：页面长时一键回到顶部并直接开始写（≤640px 才显示；见 .totop） -->
@@ -294,6 +296,7 @@ var I18N = {
     'login.err.required': '请输入用户名和密码', 'login.err.fail': '登录失败', 'login.err.req': '请求失败：',
     'login.expired': '登录已失效，请重新登录', 'logout.done': '已登出',
     'logout': '登出', 'lang.switch': 'EN', 'room.sel': '切换聊天室',
+    'room.readonly': '该聊天室为只读（仅可查看，发言入口已关闭）',
     'fld.from': '发件人', 'fld.to': '收件人', 'fld.cc': '抄送', 'fld.subject': '主题', 'fld.create': '创建Tag', 'fld.end': '结束Tag', 'fld.reply': 'ReNo',
     'fld.cc.tip': '抄送（Cc）= 知会：让对方知晓、默认不需要回复；收件人（To）= 主送：需要对方回复/直接相关。留空则不写「抄送：」行',
     'btn.plain': '不带Tag', 'btn.plain.tip': '本条不带对话 Tag（不写「对话：」行）：与「创建Tag」「结束Tag」三态互斥；点某条发言的标题会自动取消（转为回复该条）',
@@ -339,6 +342,7 @@ var I18N = {
     'login.err.required': 'Enter username and password', 'login.err.fail': 'Login failed', 'login.err.req': 'Request failed: ',
     'login.expired': 'Session expired, please log in again', 'logout.done': 'Logged out',
     'logout': 'Logout', 'lang.switch': '中', 'room.sel': 'Switch room',
+    'room.readonly': 'This room is read-only (the post form is disabled)',
     'fld.from': 'From', 'fld.to': 'To', 'fld.cc': 'Cc', 'fld.subject': 'Subject', 'fld.create': 'New Tag', 'fld.end': 'End Tag', 'fld.reply': 'ReNo',
     'fld.cc.tip': 'Cc = for information only (no reply expected by default); To = primary recipient(s) who should respond. Leave empty to omit the Cc line',
     'btn.plain': 'No Tag', 'btn.plain.tip': 'Post without a conversation tag (no "Conversation:" line). Mutually exclusive with "New Tag" / "End Tag"; clicking a post title cancels it (switches to replying to that post)',
@@ -605,7 +609,7 @@ function renderRooms(list, cur){
   rooms.forEach(function(r){
     var o = document.createElement('option');
     o.value = r.id;
-    o.textContent = r.id;
+    o.textContent = r.name || r.id;   // 展示名（配置 rooms[].name；缺省为 id）
     roomSel.appendChild(o);
   });
   var ok = rooms.some(function(r){ return r.id === cur; });
@@ -613,10 +617,28 @@ function renderRooms(list, cur){
   roomSel.value = cur;
   currentRoom = cur;
   localStorage.setItem('chat_room', cur);
+  applyReadOnly();                    // 只读房间：隐藏输入表单（服务端同样拒绝发言）
   // 把「后端实际解析出的房间」（含缺省房 / 选中项缺失时的回退）也同步进 URL，
   // 保留 hash（首次带 `#no-N` 深链进来时要留住它）。
   syncUrl(true);
 }
+// 只读房间（后端 rooms[].show_input_form=false）⇒ 隐藏三个输入面板 + 移动端「写发言」按钮，
+// 并在原提示位说明原因。注意服务端也会拒绝该房的 /api/chat/speak（见 main 的 SpeakHTTP），
+// 这里只是把「不允许」在界面上表达出来，不是唯一防线。
+function applyReadOnly(){
+  var cur = null;
+  for (var i = 0; i < rooms.length; i++){ if (rooms[i].id === currentRoom){ cur = rooms[i]; break; } }
+  var allowed = !cur || cur.show_input_form !== false;   // 缺省允许
+  var disp = allowed ? '' : 'none';
+  var ps = document.querySelectorAll('.panel');
+  for (var j = 0; j < ps.length; j++) ps[j].style.display = disp;
+  var tt = document.getElementById('toTop');
+  if (tt) tt.style.display = disp;
+  // 用独立的 #readonlyHint：#hint 由「已读取…」占用，写它会被后续请求覆盖
+  var ro = document.getElementById('readonlyHint');
+  if (ro) ro.textContent = allowed ? '' : t('room.readonly');
+}
+
 // 下拉切换聊天室 → 重新读取该聊天室内容
 roomSel.addEventListener('change', function(){
   if (roomSel.value === currentRoom) return;
@@ -1264,7 +1286,7 @@ updateBtn.addEventListener('click', update);
 
 // ---- 自动刷新（配置参数：AUTO_REFRESH_SEC —— 刷新间隔秒数）----
 // AUTO_REFRESH_SEC：**> 0 = 间隔秒数（下限 5s，防误配成狂刷）；= 0（或负数）= 不自动刷新**（勾选框隐藏）。
-// 取值来源：服务端按环境变量 CHATROOM_AUTO_REFRESH_SEC 注入（见 main.go）；直接打开本文件时用默认 30。
+// 取值来源：服务端按配置 ui.auto_refresh_sec 注入（见 main.go）；直接打开本文件时用默认 30。
 // 勾选后每 N 秒拉一次最新发言；页面切到后台（document.hidden）自动暂停，回到前台补刷一次；勾选状态记在 localStorage。
 var AUTO_REFRESH_SEC = (window.__AUTO_REFRESH_SEC__ != null) ? window.__AUTO_REFRESH_SEC__ : 30;
 var AUTO_REFRESH_KEY = 'chat_autorefresh';
@@ -1292,7 +1314,7 @@ document.addEventListener('visibilitychange', function(){
   if(!document.hidden && autoRefresh.checked) autoTick();   // 回到前台补刷一次
 });
 if(!autoRefreshEnabled()){
-  // CHATROOM_AUTO_REFRESH_SEC = 0 ⇒ 不自动刷新：隐藏勾选框与时间戳，并忽略本地记忆
+  // ui.auto_refresh_sec = 0 ⇒ 不自动刷新：隐藏勾选框与时间戳，并忽略本地记忆
   autoRefreshLbl.style.display = 'none';
   autoTs.style.display = 'none';
   autoRefresh.checked = false;

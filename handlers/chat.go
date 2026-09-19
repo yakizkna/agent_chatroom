@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"agent_chatroom/config"
 )
 
 // ---- 客户端 AI 共享沟通室（聊天室仓库的 CHAT.md）----
@@ -105,41 +107,48 @@ type ChatHandler struct {
 	room string // 聊天室标识 = 仓库目录 basename（如 <chatroomA> / <chatroomB>）
 	dir  string // 仓库根目录
 	file string // CHAT.md 绝对路径
-	mu   sync.Mutex
+	name string // 下拉框展示名（配置 rooms[].name；缺省 = room）
+	// isAuth 该房间是否需要登录（配置 rooms[].is_auth；旧「免鉴权白名单」的反向写法）。
+	isAuth bool
+	// showInputForm 是否展示输入表单（配置 rooms[].show_input_form）。
+	// false = 只读房间：前端不渲染输入表单，且服务端拒绝 /api/chat/speak（防绕过 UI 直连接口）。
+	showInputForm bool
+	mu sync.Mutex
 }
 
 // NewChatHandler 按房间目录构造 handler（room 取目录 basename、file = <dir>/CHAT.md）。
 // 供服务启动之外的调用方使用 —— 例如 `agent_chatroom archive <dir>…` 命令行模式（ra_tasks 定期归档任务）。
+// 未经配置的默认值：需鉴权、展示表单（与旧行为一致）。
 func NewChatHandler(dir string) *ChatHandler {
-	return &ChatHandler{room: filepath.Base(dir), dir: dir, file: filepath.Join(dir, "CHAT.md")}
+	base := filepath.Base(dir)
+	return &ChatHandler{
+		room: base, dir: dir, file: filepath.Join(dir, "CHAT.md"),
+		name: base, isAuth: true, showInputForm: true,
+	}
 }
 
-// ChatRooms 管理一组聊天室：CHATROOM_DIR 为逗号分隔的仓库目录列表，
+// ChatRooms 管理一组聊天室：按 config.yaml 的 rooms 段构造，
 // 每个目录的 **basename** 即聊天室 id。单房时缺省回退与历史一致。
 type ChatRooms struct {
 	rooms map[string]*ChatHandler // basename -> handler
 	order []string                // 保持配置顺序（单房/首房即缺省）
 }
 
-func NewChatRooms() *ChatRooms {
-	raw := strings.TrimSpace(os.Getenv("CHATROOM_DIR"))
-	if raw == "" {
-		raw = "/absolute/path/to/<chatroomA>" // 运行时默认：部署时按实际路径配置
-	}
+// NewChatRooms 按配置（rooms 段）构造房间集合。
+// 顺序即前端下拉框顺序，**首个房间为缺省房**（?room= 缺省时落到它）。
+func NewChatRooms(rooms []config.ResolvedRoom) *ChatRooms {
 	cr := &ChatRooms{rooms: map[string]*ChatHandler{}}
-	for _, part := range strings.Split(raw, ",") {
-		dir := strings.TrimSpace(part)
-		if dir == "" {
+	for _, r := range rooms {
+		if r.ID == "" {
 			continue
 		}
-		room := filepath.Base(filepath.Clean(dir))
-		if room == "" || room == "." || room == string(filepath.Separator) {
-			continue // 非法/根目录，跳过
+		if _, exists := cr.rooms[r.ID]; !exists {
+			cr.order = append(cr.order, r.ID)
 		}
-		if _, exists := cr.rooms[room]; !exists {
-			cr.order = append(cr.order, room)
+		cr.rooms[r.ID] = &ChatHandler{
+			room: r.ID, dir: r.Path, file: filepath.Join(r.Path, "CHAT.md"),
+			name: r.Name, isAuth: r.IsAuth, showInputForm: r.ShowInputForm,
 		}
-		cr.rooms[room] = &ChatHandler{room: room, dir: dir, file: filepath.Join(dir, "CHAT.md")}
 	}
 	return cr
 }
@@ -155,28 +164,14 @@ func (cr *ChatRooms) resolve(room string) *ChatHandler {
 	return nil
 }
 
-// noAuthWhitelist 解析「免鉴权聊天室白名单」：CHATROOM_NOAUTH_WHITELIST 为逗号分隔的聊天室 id，
-// 如 `<chatroomA>`, `<chatroomB>`。这些聊天室的 /api/chat/* 无需 JWT 登录即可读取/发言。
-func (cr *ChatRooms) noAuthWhitelist() map[string]bool {
-	out := map[string]bool{}
-	for _, part := range strings.Split(os.Getenv("CHATROOM_NOAUTH_WHITELIST"), ",") {
-		v := strings.TrimSpace(part)
-		if v != "" {
-			out[v] = true
-		}
-	}
-	return out
-}
-
-// Auth 是 /api/chat/* 的 JWT 鉴权中间件：请求 `?room=<id>` 指向的聊天室若在
-// CHATROOM_NOAUTH_WHITELIST 白名单里则直接放行（免登录）；否则走 RequireAdminJWT 管理端 JWT 鉴权。
+// Auth 是 /api/chat/* 的 JWT 鉴权中间件：请求 `?room=<id>` 指向的聊天室若配置为
+// `is_auth: false` 则直接放行（免登录）；否则走 RequireAdminJWT 管理端 JWT 鉴权。
 // room 为空时按 resolve 的缺省规则取首个聊天室再判定，保证与后续实际读写同一房间保持一致。
 func (cr *ChatRooms) Auth() gin.HandlerFunc {
-	noauth := cr.noAuthWhitelist()
 	jwt := RequireAdminJWT()
 	return func(c *gin.Context) {
-		if h := cr.resolve(c.Query("room")); h != nil && noauth[h.room] {
-			c.Next() // 白名单聊天室：免鉴权放行
+		if h := cr.resolve(c.Query("room")); h != nil && !h.isAuth {
+			c.Next() // 免鉴权房间：直接放行
 			return
 		}
 		jwt(c) // 其余走管理端 JWT
@@ -184,10 +179,16 @@ func (cr *ChatRooms) Auth() gin.HandlerFunc {
 }
 
 // roomList 返回按配置顺序排列的聊天室列表，供前端下拉框渲染。
+// name = 展示名；show_input_form = 该房是否允许通过 UI 发言（false ⇒ 前端隐藏输入表单）。
 func (cr *ChatRooms) roomList() []gin.H {
 	out := make([]gin.H, 0, len(cr.order))
 	for _, id := range cr.order {
-		out = append(out, gin.H{"id": id, "dir": cr.rooms[id].dir})
+		out = append(out, gin.H{
+			"id":              id,
+			"name":            cr.rooms[id].name,
+			"dir":             cr.rooms[id].dir,
+			"show_input_form": cr.rooms[id].showInputForm,
+		})
 	}
 	return out
 }
@@ -1013,7 +1014,7 @@ func (h *ChatHandler) Speak(content, from, to, cc, subject, session, reply, lang
 func (cr *ChatRooms) GetChat(c *gin.Context) {
 	h := cr.resolve(c.Query("room"))
 	if h == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "未知聊天室：" + c.Query("room") + "（CHATROOM_DIR 配置了多个仓库时请用 ?room=<目录名> 选择）"})
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "未知聊天室：" + c.Query("room") + "（config.yaml 的 rooms 里没有它；多房间时用 ?room=<id> 选择，id = path 的最后一段）"})
 		return
 	}
 	h.mu.Lock()
@@ -1038,7 +1039,7 @@ func (cr *ChatRooms) GetChat(c *gin.Context) {
 		"chatroomDir": h.dir,
 		"room":        h.room,
 		"rooms":       cr.roomList(),
-		"noauth":      cr.noAuthWhitelist()[h.room], // 当前房是否在免鉴权白名单（前端据此隐藏登出）
+		"noauth":      !h.isAuth, // 当前房是否免鉴权（前端据此隐藏登出）
 	})
 }
 
@@ -1068,6 +1069,12 @@ func (cr *ChatRooms) Update(c *gin.Context) {
 
 // Speak POST /api/chat/speak?room=<id> —— 向所选聊天室发言（写 CHAT.md 并 push）。
 func (cr *ChatRooms) SpeakHTTP(c *gin.Context) {
+	// 只读房间（配置 rooms[].show_input_form=false）：前端不渲染表单，服务端**同样拒绝**，
+	// 否则绕过界面直接调接口仍能写入。
+	if h := cr.resolve(c.Query("room")); h != nil && !h.showInputForm {
+		c.JSON(http.StatusForbidden, gin.H{"ok": false, "error": "该聊天室为只读（show_input_form=false）"})
+		return
+	}
 	var req struct {
 		Content, From, To, Cc, Subject, Session, Reply, Lang string
 		Create                                              bool // 「创建 Tag」勾选（该短名必须不存在）

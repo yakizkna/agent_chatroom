@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"agent_chatroom/config"
 	"agent_chatroom/handlers"
 )
 
@@ -21,6 +22,23 @@ func main() {
 		os.Exit(runArchive(os.Args[2:]))
 	}
 
+	// 配置：**唯一来源 = YAML**（config.yaml）。不再读任何 CHATROOM_* / AUTH_* 环境变量。
+	cfg, err := config.Load(configPath())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[启动失败] %v\n", err)
+		os.Exit(1)
+	}
+	config.Set(cfg)
+	fmt.Printf("配置：%s（端口 %d，聊天室 %d 个）\n", cfg.Path(), cfg.Port, len(cfg.ResolvedRooms()))
+	for _, r := range cfg.ResolvedRooms() {
+		mark := "CHAT.md ✓"
+		if _, e := os.Stat(filepath.Join(r.Path, "CHAT.md")); e != nil {
+			mark = "缺 CHAT.md ✗"
+		}
+		fmt.Printf("  · %-16s id=%-20s 鉴权=%-5v 输入表单=%-5v %s\n",
+			r.Name, r.ID, r.IsAuth, r.ShowInputForm, mark)
+	}
+
 	r := gin.Default()
 
 	// 根路径重定向到沟通室页面（直接访问 :8093/ 也能打开，而非 404）
@@ -29,7 +47,7 @@ func main() {
 	})
 
 	// 沟通室页面（静态 HTML + 注入「自动刷新间隔」配置）
-	// 页面是纯静态文件，但「自动刷新间隔」可由环境变量 CHATROOM_AUTO_REFRESH_SEC 配置
+	// 页面是纯静态文件，但「自动刷新间隔」来自配置 ui.auto_refresh_sec
 	// ⇒ 服务端在 `</head>` 前插一段 <script>window.__AUTO_REFRESH_SEC__ = <n>;</script>，
 	// 页面读取它（未注入时用页面默认值）。这样改配置无需改前端代码、也不额外发请求。
 	r.GET("/chatroom", func(c *gin.Context) {
@@ -43,9 +61,9 @@ func main() {
 			[]byte(strings.Replace(string(html), "</head>", inject, 1)))
 	})
 
-	chat := handlers.NewChatRooms()
-	// /api/chat/* 鉴权：白名单聊天室（CHATROOM_NOAUTH_WHITELIST）免登录，其余走管理端 JWT。
-	// 登录接口独立挂载（不经 JWT）：/api/chat/login 用 ADMIN_USER/ADMIN_PASSWORD 换 token，AUTH_JWT_SECRET 验签。
+	chat := handlers.NewChatRooms(cfg.ResolvedRooms())
+	// /api/chat/* 鉴权：房间 is_auth=false 免登录，其余走管理端 JWT。
+	// 登录接口独立挂载（不经 JWT）：/api/chat/login 把账号密码转发到鉴权服务换 JWT，本地验签。
 	r.POST("/api/chat/login", handlers.AdminLogin)
 	chatGroup := r.Group("/api/chat", chat.Auth())
 	{
@@ -55,12 +73,25 @@ func main() {
 		chatGroup.GET("/file/*filepath", chat.ChatFile) // 仓库内文件代理（替代 GitHub raw，支持私有仓库）
 	}
 
-	// 端口：PORT 环境变量优先，缺省 8093
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8093"
+	r.Run(":" + strconv.Itoa(cfg.Port))
+}
+
+// configPath 解析配置文件路径：命令行 `-c <路径>` / `--config <路径>` > 环境变量 CHATROOM_CONFIG > 缺省 config.yaml。
+func configPath() string {
+	args := os.Args[1:]
+	for i, a := range args {
+		switch {
+		case a == "-c" || a == "--config":
+			if i+1 < len(args) {
+				return args[i+1]
+			}
+		case strings.HasPrefix(a, "-c="):
+			return strings.TrimPrefix(a, "-c=")
+		case strings.HasPrefix(a, "--config="):
+			return strings.TrimPrefix(a, "--config=")
+		}
 	}
-	r.Run(":" + port)
+	return os.Getenv("CHATROOM_CONFIG")
 }
 
 // runArchive 实现 `agent_chatroom archive [--dry] <房间目录>…`：
@@ -115,20 +146,16 @@ func runArchive(args []string) int {
 
 // chatAutoRefreshSec 读取沟通室页面的「自动刷新间隔」（秒）。口径（与页面一致）：
 //
-//	CHATROOM_AUTO_REFRESH_SEC 未设 / 非法 → 30（默认）
-//	= 0 或负数                          → 0 = **不自动刷新**（页面隐藏该勾选框）
-//	= 1..4                              → 页面按下限 5s 处理（防误配成狂刷）
+//	配置 ui.auto_refresh_sec 省略 → 30（默认）
+//	= 0 或负数                    → 0 = **不自动刷新**（页面隐藏该勾选框）
+//	= 1..4                        → 页面按下限 5s 处理（防误配成狂刷）
 func chatAutoRefreshSec() int {
-	raw := strings.TrimSpace(os.Getenv("CHATROOM_AUTO_REFRESH_SEC"))
-	if raw == "" {
+	cfg := config.Get()
+	if cfg == nil || cfg.UI.AutoRefreshSec == nil {
 		return 30
 	}
-	n, err := strconv.Atoi(raw)
-	if err != nil {
-		return 30
-	}
-	if n < 0 {
+	if *cfg.UI.AutoRefreshSec < 0 {
 		return 0
 	}
-	return n
+	return *cfg.UI.AutoRefreshSec
 }

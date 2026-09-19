@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # agent_chatroom 本地管理脚本：start / stop / restart / status
-# 依赖环境变量：CHATROOM_DIR / CHATROOM_NOAUTH_WHITELIST / AUTH_JWT_SECRET / ADMIN_USER / ADMIN_PASSWORD（见 .env）
+# 配置**唯一来源 = config.yaml**（模板 config.example.yaml）；另可用 -c <路径> / CHATROOM_CONFIG 指定。
+# 端口也来自配置（port:）；这里只是读出来给「按端口找孤儿进程」用。
 set -e
 cd "$(dirname "$0")"
 
 BIN=agent_chatroom
 PIDFILE=agent_chatroom.pid
+CONFIG_FILE="${CHATROOM_CONFIG:-config.yaml}"
+# 从配置里取 port（只认顶层 `port: <数字>`；取不到时回落 8093）
+PORT="$(sed -n 's/^[[:space:]]*port:[[:space:]]*\([0-9]\{1,\}\)[[:space:]]*$/\1/p' "$CONFIG_FILE" 2>/dev/null | head -1)"
 PORT="${PORT:-8093}"
 
 usage() {
@@ -40,10 +44,8 @@ do_start() {
     return 1
   fi
   go build -o "$BIN" .
-  if [ -f .env ]; then
-    set -a; . ./.env; set +a
-  fi
-  PORT="$PORT" nohup ./"$BIN" >agent_chatroom.log 2>&1 &
+  # 不再 source .env：房间 / 鉴权 / 端口一律来自 config.yaml
+  nohup ./"$BIN" -c "$CONFIG_FILE" >agent_chatroom.log 2>&1 &
   echo $! >"$PIDFILE"
   sleep 1
   if is_running; then

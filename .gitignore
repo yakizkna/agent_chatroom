@@ -1,4 +1,6 @@
 agent_chatroom
 .env
+# 真实配置（含 jwt_secret）不入 git；模板 = config.example.yaml
+config.yaml
 agent_chatroom.log
 agent_chatroom.pid
