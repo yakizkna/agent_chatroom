@@ -340,3 +340,45 @@ func TestArchiveOverflowBatches(t *testing.T) {
 		t.Errorf("_1 已满，不应再被改写（批量归档的意义）")
 	}
 }
+
+// 历史视图（2026-09-19 加）：归档清单（k 降序 + No. 区间）+ 按名读取（白名单，防目录穿越）。
+func TestListArchivesAndArchiveByName(t *testing.T) {
+	dir := t.TempDir()
+	block := func(no, txt string) string {
+		return fmt.Sprintf("# 甲 No.%s\n\n- 时间：2026-09-19 10:00:00\n- 收件人：所有人\n- 主题：%s\n\n%s\n\n---\n\n---\n", no, txt, txt)
+	}
+	write := func(name, content string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatalf("写 %s 失败：%v", name, err)
+		}
+	}
+	write("CHAT.md", block("201", "最新一贴"))
+	write("CHAT_ARCHIVE_1.md", block("1", "最早一贴")+block("100", "第一页末"))
+	write("CHAT_ARCHIVE_2.md", block("101", "第二页首"))
+	write("CHAT_ARCHIVE_x.md", block("9", "文件名非法，不该被列出"))
+	write("OTHER.md", "无关文件")
+
+	h := NewChatHandler(dir)
+	list := h.listArchives()
+	if len(list) != 2 {
+		t.Fatalf("归档清单应 2 项（只认 CHAT_ARCHIVE_<数字>.md），实际 %d 项：%v", len(list), list)
+	}
+	if list[0]["name"] != "CHAT_ARCHIVE_2.md" {
+		t.Errorf("清单应 k 降序（新的在前），首项 = %v", list[0]["name"])
+	}
+	if list[0]["from"] != 101 || list[0]["to"] != 101 {
+		t.Errorf("_2 的 No. 区间应 101–101，实际 %v–%v", list[0]["from"], list[0]["to"])
+	}
+	if list[1]["blocks"] != 2 || list[1]["from"] != 1 || list[1]["to"] != 100 {
+		t.Errorf("_1 应 2 块、No.1–100，实际 blocks=%v No.%v–%v", list[1]["blocks"], list[1]["from"], list[1]["to"])
+	}
+
+	if c, ok := h.archiveByName("CHAT_ARCHIVE_1.md"); !ok || !strings.Contains(c, "第一页末") {
+		t.Errorf("按名读取 _1 应成功且含其内容，ok=%v content=%q", ok, c)
+	}
+	for _, bad := range []string{"../CHAT.md", "CHAT.md", "CHAT_ARCHIVE_x.md", "CHAT_ARCHIVE_9.md", "CHAT_ARCHIVE_1.md.bak"} {
+		if _, ok := h.archiveByName(bad); ok {
+			t.Errorf("%q 不该被接受（白名单外或不存在）", bad)
+		}
+	}
+}

@@ -129,7 +129,8 @@ POST /api/chat/speak?room=<房间id>       # Bearer <admin JWT>
 body: {content, from, to, subject, session, reply, create, lang}
       session = "Tag:<短名>" | "EndTag:<短名>"（旧写法 Tag.<短名> / End: Tag.<短名> 亦兼容）
       reply   = "No.<n>" 或数字；create = true 表示「创建 Tag」（短名必须不存在）
-GET  /api/chat?room=<房间id>             # 读（rooms / content / noauth；只读 CHAT.md）
+GET  /api/chat?room=<房间id>             # 读（rooms / content / noauth；默认只读 CHAT.md）
+GET  /api/chat?room=<房间id>&archive=CHAT_ARCHIVE_<k>.md   # 历史视图：读指定归档（content = 该归档）
 POST /api/chat/update?room=<房间id>      # pull + 读最新
 ```
 

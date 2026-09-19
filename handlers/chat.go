@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -236,9 +237,19 @@ func (h *ChatHandler) chatFiles() []string {
 func (h *ChatHandler) parseBlocks() []chatBlock {
 	var blocks []chatBlock
 	for _, path := range h.chatFiles() {
+		blocks = append(blocks, h.parseBlocksFrom(path)...)
+	}
+	return blocks
+}
+
+// parseBlocksFrom 解析**单个**聊天文件（`CHAT.md` 或某份归档）为发言块。
+// 2026-09-19 抽出：历史视图要按文件统计归档的条数与 `No.` 区间，而 `parseBlocks` 只读主文件。
+func (h *ChatHandler) parseBlocksFrom(path string) []chatBlock {
+	var blocks []chatBlock
+	{
 		data, err := os.ReadFile(path)
 		if err != nil {
-			continue
+			return nil
 		}
 		lines := strings.Split(strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(string(data)), "\n")
 		inCode := false
@@ -307,6 +318,70 @@ func (h *ChatHandler) parseBlocks() []chatBlock {
 		}
 	}
 	return blocks
+}
+
+// archiveNameRE 归档文件名的**白名单**（防目录穿越：只接受 `CHAT_ARCHIVE_<数字>.md`）。
+var archiveNameRE = regexp.MustCompile(`^CHAT_ARCHIVE_[0-9]+\.md$`)
+
+// listArchives 归档清单（`k` 降序 = 新→旧），供页面「历史视图」下拉。
+// 每项：`{name, k, blocks, from, to}`（from/to = 该归档内最小/最大 `No.`；无块时为 0）。
+// 2026-09-19 加：页面默认只读 `CHAT.md` 之后，翻更早的发言改由用户显式选归档。
+func (h *ChatHandler) listArchives() []gin.H {
+	entries, err := os.ReadDir(h.dir)
+	if err != nil {
+		return nil
+	}
+	type arc struct {
+		k    int
+		name string
+	}
+	var arcs []arc
+	for _, e := range entries {
+		n := e.Name()
+		if !e.Type().IsRegular() || !archiveNameRE.MatchString(n) {
+			continue
+		}
+		k, cerr := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(n, "CHAT_ARCHIVE_"), ".md"))
+		if cerr != nil {
+			continue
+		}
+		arcs = append(arcs, arc{k, n})
+	}
+	sort.Slice(arcs, func(i, j int) bool { return arcs[i].k > arcs[j].k })
+	out := []gin.H{}
+	for _, a := range arcs {
+		blocks := h.parseBlocksFrom(filepath.Join(h.dir, a.name))
+		from, to := 0, 0
+		for _, b := range blocks {
+			if b.No == "" {
+				continue
+			}
+			n, err := strconv.Atoi(b.No[3:])
+			if err != nil {
+				continue
+			}
+			if from == 0 || n < from {
+				from = n
+			}
+			if n > to {
+				to = n
+			}
+		}
+		out = append(out, gin.H{"name": a.name, "k": a.k, "blocks": len(blocks), "from": from, "to": to})
+	}
+	return out
+}
+
+// archiveByName 读取指定归档全文；文件名不在白名单或读不到时返回 ok=false。
+func (h *ChatHandler) archiveByName(name string) (string, bool) {
+	if !archiveNameRE.MatchString(name) {
+		return "", false
+	}
+	data, err := os.ReadFile(filepath.Join(h.dir, name))
+	if err != nil {
+		return "", false
+	}
+	return strings.ReplaceAll(string(data), "\r\n", "\n"), true
 }
 
 func chatMaxNo(blocks []chatBlock) int {
@@ -1028,10 +1103,24 @@ func (cr *ChatRooms) GetChat(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err})
 		return
 	}
-	// 2026-09-19 用户定：接口/页面**只读 CHAT.md**（保底 ≥100 条）⇒ 不再返回「最新一份归档」全文。
+	// 2026-09-19 用户定：默认**只读 CHAT.md**（保底 ≥100 条）⇒ 不再自动返回归档全文。
+	// 同批新增「历史视图」：带 `?archive=CHAT_ARCHIVE_<k>.md` 时 `content` = 该归档内容（只读浏览，
+	// 前端据此暂停自动刷新并禁用发言）—— 归档由用户显式选择，不再无脑拼接。
+	hist := gin.H(nil)
+	if q := strings.TrimSpace(c.Query("archive")); q != "" {
+		ac, ok := h.archiveByName(q)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": "归档文件名不合法（应为 CHAT_ARCHIVE_<数字>.md 且真实存在）：" + q})
+			return
+		}
+		content = ac
+		hist = gin.H{"name": q}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"ok":          true,
 		"content":     content,
+		"archives":    h.listArchives(), // 历史视图下拉：归档清单 name/k/blocks/from/to
+		"history":     hist,             // 非空 = 当前展示的是某份归档（只读）
 		"repo":        "yakizkna/" + h.room,
 		"chatroomDir": h.dir,
 		"room":        h.room,

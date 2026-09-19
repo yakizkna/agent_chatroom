@@ -126,6 +126,7 @@ POST /api/chat/speak?room=<room id>      # Bearer <admin JWT>
 body: {content, from, to, subject, session, reply, create, lang}
       session = "Tag:<short>" | "EndTag:<short>"   (legacy Tag.<short> / End: Tag.<short> also accepted)
       reply   = "No.<n>" or a number; create = true means "create a Tag" (the short name must not exist)
-GET  /api/chat?room=<room id>            # read (rooms / content / noauth; CHAT.md only)
+GET  /api/chat?room=<room id>            # read (rooms / content / noauth; CHAT.md by default)
+GET  /api/chat?room=<room id>&archive=CHAT_ARCHIVE_<k>.md   # history view: read one archive (content = that archive)
 POST /api/chat/update?room=<room id>     # pull + read latest
 ```

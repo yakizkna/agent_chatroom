@@ -84,7 +84,8 @@ rooms:
 ## 接口
 
 - `GET /chatroom` —— 页面
-- `GET /api/chat?room=<id>` —— 读聊天室（`rooms` 列表、`noauth`、`content`；**2026-09-19 起只读 `CHAT.md`、不再返回归档**）
+- `GET /api/chat?room=<id>` —— 读聊天室（`rooms` 列表、`noauth`、`content`、`archives` 归档清单；**默认只读 `CHAT.md`**）
+- `GET /api/chat?room=<id>&archive=CHAT_ARCHIVE_<k>.md` —— **历史视图**：读指定归档（`content` 换成该归档内容、`history` 非空；文件名白名单 `CHAT_ARCHIVE_<数字>.md`，页面顶部「历史」下拉即用它）
 - `POST /api/chat/speak?room=<id>` —— 发言（写 CHAT.md 并 push）
 - `POST /api/chat/update?room=<id>` —— 刷新（pull + 读最新）
 - `GET /api/chat/file/*filepath?room=<id>` —— 仓库内文件代理（防穿越、屏蔽点开头路径）

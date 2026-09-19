@@ -123,6 +123,12 @@
                      font-size:12.5px; color:var(--soft); }
   .chat .filterbar code { background:none; border:0; color:var(--acc); padding:0; }
   .chat .filterbar button { padding:3px 10px; font-size:12px; }
+  /* 历史视图工具条（2026-09-19 加）：选归档文件，只读浏览 */
+  .histbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 12px; padding:8px 12px;
+             background:#1b1510; border:1px solid #3c3226; border-radius:8px; font-size:13px; color:var(--soft); }
+  .histbar select { padding:3px 8px; font-size:13px; max-width:min(460px, 72vw); }
+  .histbar .histnote { color:#d9b382; }
+  .histbar button { padding:3px 10px; font-size:12px; }
   label.chk { display:flex; align-items:center; gap:6px; white-space:nowrap; font-size:13px;
               color:var(--soft); cursor:pointer; border:1px solid var(--line);
               border-radius:8px; padding:0 12px; align-self:center; }
@@ -278,6 +284,14 @@
   <div class="hint" id="hint"></div>
   <!-- 只读房间的说明（独立元素：#hint 会被「已读取…」占用，避免互相覆盖） -->
   <div class="hint" id="readonlyHint"></div>
+  <!-- 历史视图（2026-09-19 加）：下拉选归档文件 ⇒ content 换成该归档、只读浏览、自动刷新暂停 -->
+  <div class="histbar">
+    <label class="chk"><span data-i18n="hist.label">历史：</span>
+      <select id="histSel"><option value=""></option></select>
+    </label>
+    <span class="histnote" id="histNote"></span>
+    <button type="button" id="histBack" data-i18n="hist.back" hidden>回到最新</button>
+  </div>
   <div class="chat" id="box" data-i18n="loading">加载中…</div>
 
   <!-- 移动端悬浮按钮：页面长时一键回到顶部并直接开始写（≤640px 才显示；见 .totop） -->
@@ -306,6 +320,9 @@ var I18N = {
     // 跳转/深链找不到目标编号时的提示（2026-09-19 起页面只读 CHAT.md，不再拼接归档）
     'hint.anchor.none': '未找到 %s —— 它可能在更早的发言里（本页只显示 CHAT.md 最近 100 条）',
     'hi.refreshed': '已刷新',
+    // 历史视图（2026-09-19 加）：选归档文件浏览更早的发言（只读）
+    'hist.label': '历史：', 'hist.latest': '最新（CHAT.md）', 'hist.back': '回到最新',
+    'hist.opt': '%s（No.%s–%s）', 'hist.bar': '历史视图：%s —— 只读（自动刷新已暂停）',
     'hi.autoon': '自动刷新已开启：每 %s 秒（页面切到后台时暂停）', 'hi.autooff': '自动刷新已关闭',
     'btn.totop': '写发言', 'btn.totop.tip': '回到顶部并开始写发言（手机上滚动后浮出）',
     'hi.sent': '已发言', 'hi.filled': '已填充：%s',
@@ -350,6 +367,9 @@ var I18N = {
     'hi.read': 'Read CHAT.md of %s (repo: %s)',
     'hint.anchor.none': '%s not found — it may be in older posts (this page shows only the latest 100 blocks of CHAT.md)',
     'hi.refreshed': 'Refreshed',
+    // History view (2026-09-19): pick an archive file to browse older posts (read-only)
+    'hist.label': 'History:', 'hist.latest': 'Latest (CHAT.md)', 'hist.back': 'Back to latest',
+    'hist.opt': '%s (No.%s–%s)', 'hist.bar': 'History view: %s — read-only (auto-refresh paused)',
     'hi.autoon': 'Auto refresh on: every %s s (paused while the page is hidden)', 'hi.autooff': 'Auto refresh off',
     'btn.totop': 'Compose', 'btn.totop.tip': 'Back to top and start composing (appears after scrolling on mobile)',
     'hi.sent': 'Posted', 'hi.filled': 'Filled: %s',
@@ -513,6 +533,11 @@ var updateBtn = document.getElementById('updateBtn');
 var autoRefresh = document.getElementById('autoRefresh');       // 「自动刷新」勾选
 var autoRefreshLbl = document.getElementById('autoRefreshLbl');
 var autoTs = document.getElementById('autoTs');                 // 上次自动刷新时间（HH:MM:SS）
+// 历史视图（2026-09-19 加）：选归档文件浏览更早的发言；非空 historyName = 只读模式
+var histSel = document.getElementById('histSel');
+var histNote = document.getElementById('histNote');
+var histBack = document.getElementById('histBack');
+var historyName = '';
 var session = document.getElementById('session');
 var reply = document.getElementById('reply');
 var endTag = document.getElementById('endTag');
@@ -717,7 +742,8 @@ function inline(s){
   });
 }
 function setHint(t, cls){ hint.textContent=t; hint.className='hint '+(cls||''); }
-function busy(on){ speakBtn.disabled=on; updateBtn.disabled=on; }
+// busy：历史视图下发言恒禁用（只读）—— 否则 load() 末尾的 busy(false) 会把禁用态解掉
+function busy(on){ speakBtn.disabled = on || !!historyName; updateBtn.disabled = on; }
 
 // CHAT.md → HTML（自包含迷你 Markdown：标题 / 表格 / 列表 / 引用 / 代码块 / 分隔线 + 行内标记）。
 // 链接：`[文本](url)`、`<url>`、裸 `https://…` 都会渲染成可点链接（后两者由 linkify() 处理）。
@@ -1099,12 +1125,22 @@ function scrollToHash(){
   setHint(t('hint.anchor.none', 'No.' + h.replace(/^no-/, '')), 'err');
 }
 
-function show(content, note){
+function show(content, note, hist){
   rawMd = content;
+  historyName = hist || '';
   paint();
+  paintHist();
   // ⚠️ 顺序：先出「已读取…」的常规提示，再跑深链跳转 —— 否则「找不到该编号」的提示会被它覆盖
   if(note) setHint(note, 'ok');
   scrollToHash();
+}
+
+// 历史视图状态：提示条 + 「回到最新」按钮 + 只读（禁发言）
+function paintHist(){
+  if (histNote) histNote.textContent = historyName ? t('hist.bar', historyName) : '';
+  if (histBack) histBack.hidden = !historyName;
+  if (msg) msg.disabled = !!historyName;
+  if (speakBtn) speakBtn.disabled = !!historyName;
 }
 
 // 点会话徽标 = 只看该会话；点「取消筛选」恢复全部
@@ -1196,14 +1232,32 @@ noTagBox.addEventListener('change', function(){
 });
 syncPlainChk();
 
-function load(){
+// 历史视图下拉：归档清单（后端按 k 降序 = 新→旧；空清单则禁用）
+function renderArchives(list, cur){
+  if (!histSel) return;
+  var arr = list || [];
+  var opts = ['<option value="">' + t('hist.latest') + '</option>'];
+  arr.forEach(function(a){
+    opts.push('<option value="' + esc(a.name) + '"' + (a.name === cur ? ' selected' : '') + '>' +
+              esc(t('hist.opt', a.name, String(a.from), String(a.to))) + '</option>');
+  });
+  histSel.innerHTML = opts.join('');
+  histSel.disabled = arr.length === 0;
+}
+if (histSel) histSel.addEventListener('change', function(){ load(histSel.value || ''); });
+if (histBack) histBack.addEventListener('click', function(){ load(''); });
+
+// load：默认读 CHAT.md；传 archiveName 则读该归档（历史视图，只读）
+function load(archiveName){
   busy(true); setHint(t('hi.reading'),'spinner');
-  apiFetch('/api/chat' + roomQuery()).then(r=>r.json()).then(function(j){
+  var q = '/api/chat' + roomQuery() + (archiveName ? '&archive=' + encodeURIComponent(archiveName) : '');
+  apiFetch(q).then(r=>r.json()).then(function(j){
     if(j.ok){
       renderRooms(j.rooms, j.room);
       // 免鉴权白名单聊天室：无登录概念，隐藏「登出」（有 token 进入时也隐藏，避免误导）
       if (logoutBtn) logoutBtn.style.display = (j.noauth) ? 'none' : '';
-      show(j.content, t('hi.read', (j.room || ''), (j.repo || '')));
+      renderArchives(j.archives, archiveName || '');
+      show(j.content, t('hi.read', (j.room || ''), (j.repo || '')), (j.history && j.history.name) || '');
     }
     else setHint(j.error||t('err.readfail'),'err');
   }).catch(e=>{ if(e.message!=='unauthorized') setHint(t('err.reqfail')+e,'err'); }).finally(()=>busy(false));
@@ -1211,7 +1265,7 @@ function load(){
 
 function update(opts){
   var auto = !!(opts && opts.auto);   // 自动刷新：不闪烁按钮、不刷「正在 pull」提示、不打扰表单
-  if(auto){ if(autoBusy) return; autoBusy = true; }
+  if(auto){ if(historyName) return; if(autoBusy) return; autoBusy = true; }   // 历史视图：暂停自动刷新，否则会被刷回最新
   else { busy(true); setHint(t('hi.pulling'),'spinner'); }
   return apiFetch('/api/chat/update' + roomQuery(), {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
     .then(r=>r.json()).then(function(j){
