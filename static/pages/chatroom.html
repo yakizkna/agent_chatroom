@@ -15,10 +15,12 @@
   h1 { font-size:20px; margin:0 0 38px; display:flex; align-items:center; gap:10px; }
   /* 仓库下拉：高度 / 圆角与输入框（input，39px · 圆角 8px）保持一致 —— 用户 2026-09-18 指出「太高…不，是太矮」，
      原先只有 25px（padding 3px）像一条细缝。移动端另见媒体查询（44px）。 */
-  h1 .roomsel { font-size:13.5px; vertical-align:2px; margin-left:10px; background:#0b0d12; color:var(--ink);
-               border:1px solid var(--line); border-radius:8px; padding:10px 12px; outline:none; }
-  h1 .roomsel:focus { border-color:var(--acc); }
-  h1 .roomsel:disabled { opacity:.5; }
+  /* 下拉统一样式（2026-09-19：由 `h1 .roomsel` 放宽为 `.roomsel`）⇒ 房间选择与「历史」归档选择共用同一套外观 */
+  .roomsel { font-size:13.5px; background:#0b0d12; color:var(--ink);
+             border:1px solid var(--line); border-radius:8px; padding:10px 12px; outline:none; }
+  h1 .roomsel { vertical-align:2px; margin-left:10px; }
+  .roomsel:focus { border-color:var(--acc); }
+  .roomsel:disabled { opacity:.5; }
   .sub { color:var(--soft); font-size:13px; margin-bottom:20px; }
   .sub .mini { margin-left:10px; padding:2px 10px; font-size:12px;
                background:transparent; border:1px solid var(--line); color:var(--soft);
@@ -123,12 +125,11 @@
                      font-size:12.5px; color:var(--soft); }
   .chat .filterbar code { background:none; border:0; color:var(--acc); padding:0; }
   .chat .filterbar button { padding:3px 10px; font-size:12px; }
-  /* 历史视图工具条（2026-09-19 加）：选归档文件，只读浏览 */
-  .histbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 12px; padding:8px 12px;
-             background:#1b1510; border:1px solid #3c3226; border-radius:8px; font-size:13px; color:var(--soft); }
-  .histbar select { padding:3px 8px; font-size:13px; max-width:min(460px, 72vw); }
-  .histbar .histnote { color:#d9b382; }
-  .histbar button { padding:3px 10px; font-size:12px; }
+  /* 历史视图工具条（2026-09-19 加）：选归档文件，只读浏览。
+     ⚠️ 样式**与页面统一**：容器直接用 .panel（行布局/间距同发件人那一行）、标签用 .lbl、
+     下拉复用 .roomsel、按钮走全局 button ⇒ 这里只补两处微调。 */
+  .histbar .histnote { color:var(--soft); font-size:13px; }
+  .histbar .roomsel { max-width:min(460px, 72vw); }
   label.chk { display:flex; align-items:center; gap:6px; white-space:nowrap; font-size:13px;
               color:var(--soft); cursor:pointer; border:1px solid var(--line);
               border-radius:8px; padding:0 12px; align-self:center; }
@@ -285,9 +286,9 @@
   <!-- 只读房间的说明（独立元素：#hint 会被「已读取…」占用，避免互相覆盖） -->
   <div class="hint" id="readonlyHint"></div>
   <!-- 历史视图（2026-09-19 加）：下拉选归档文件 ⇒ content 换成该归档、只读浏览、自动刷新暂停 -->
-  <div class="histbar">
-    <label class="chk"><span data-i18n="hist.label">历史：</span>
-      <select id="histSel"><option value=""></option></select>
+  <div class="panel histbar">
+    <label class="fld"><span class="lbl" data-i18n="hist.label">历史</span>
+      <select id="histSel" class="roomsel"><option value=""></option></select>
     </label>
     <span class="histnote" id="histNote"></span>
     <button type="button" id="histBack" data-i18n="hist.back" hidden>回到最新</button>
@@ -321,7 +322,7 @@ var I18N = {
     'hint.anchor.none': '未找到 %s —— 它可能在更早的发言里（本页只显示 CHAT.md 最近 100 条）',
     'hi.refreshed': '已刷新',
     // 历史视图（2026-09-19 加）：选归档文件浏览更早的发言（只读）
-    'hist.label': '历史：', 'hist.latest': '最新（CHAT.md）', 'hist.back': '回到最新',
+    'hist.label': '历史', 'hist.latest': '最新（CHAT.md）', 'hist.back': '回到最新',
     'hist.opt': '%s（No.%s–%s）', 'hist.bar': '历史视图：%s —— 只读（自动刷新已暂停）',
     'hi.autoon': '自动刷新已开启：每 %s 秒（页面切到后台时暂停）', 'hi.autooff': '自动刷新已关闭',
     'btn.totop': '写发言', 'btn.totop.tip': '回到顶部并开始写发言（手机上滚动后浮出）',
@@ -368,7 +369,7 @@ var I18N = {
     'hint.anchor.none': '%s not found — it may be in older posts (this page shows only the latest 100 blocks of CHAT.md)',
     'hi.refreshed': 'Refreshed',
     // History view (2026-09-19): pick an archive file to browse older posts (read-only)
-    'hist.label': 'History:', 'hist.latest': 'Latest (CHAT.md)', 'hist.back': 'Back to latest',
+    'hist.label': 'History', 'hist.latest': 'Latest (CHAT.md)', 'hist.back': 'Back to latest',
     'hist.opt': '%s (No.%s–%s)', 'hist.bar': 'History view: %s — read-only (auto-refresh paused)',
     'hi.autoon': 'Auto refresh on: every %s s (paused while the page is hidden)', 'hi.autooff': 'Auto refresh off',
     'btn.totop': 'Compose', 'btn.totop.tip': 'Back to top and start composing (appears after scrolling on mobile)',
