@@ -106,3 +106,6 @@ rooms:
 ## License
 
 [MIT](LICENSE) — @2026 yakizkna
+## 相关文档
+
+- [`doc/UI_NOTES.md`](doc/UI_NOTES.md) —— `static/pages/chatroom.html` 页面功能笔记：表单布局 / 三态勾选 / 自动刷新 / 手机端断点与字号 / 发言附件与文件引用 / 收件人历史输入，以及「改这个页面前先看」的通用坑。
