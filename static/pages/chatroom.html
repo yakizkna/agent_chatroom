@@ -318,7 +318,7 @@ var I18N = {
     'speak': '发言', 'update': '刷新', 'loading': '加载中…',
     'btn.auto': '自动刷新', 'btn.auto.tip': '每 %s 秒自动拉取最新发言；页面切到后台时暂停，回到前台立即补刷一次',
     'hist.tip': '历史输入：点这里快选（发言成功后自动记录最近 8 条）', 'hist.clear': '清空历史',
-    'pick.tip': '从本房 CHAT.md 的发言用户中选择（可多选，多个用 + 分隔）', 'pick.all': '所有人', 'pick.clear': '清空选择',
+    'pick.tip': '从本房 CHAT.md 的发言用户中选择（可多选；多个之间用英文逗号 + 空格分隔，如 A, B）', 'pick.all': '所有人', 'pick.clear': '清空选择',
     'ph.from': '发件人自定义', 'ph.to': '所有人', 'ph.subject': '留空取正文首行', 'ph.session': '默认只读：点上一条标题自动填；勾选「创建Tag」后可填新短名（如 cup-quota-0917）',
     'ph.reply': '编号', 'ph.msg': '输入要说的话，Ctrl/⌘+回车 发送…',
     'ph.msg.touch': '输入要说的话…',   // ≤640px（触屏）：键盘没有 Ctrl/⌘ ⇒ 不提示快捷键
@@ -367,7 +367,7 @@ var I18N = {
     'speak': 'Post', 'update': 'Refresh', 'loading': 'Loading…',
     'btn.auto': 'Auto refresh', 'btn.auto.tip': 'Pull the latest posts every %s s; paused while the page is hidden, one catch-up refresh when you return',
     'hist.tip': 'Recent entries: click to pick (last 8 saved after each successful post)', 'hist.clear': 'Clear history',
-    'pick.tip': 'Pick from speakers in this room\'s CHAT.md (multi-select, joined with +)', 'pick.all': '所有人(Everyone)', 'pick.clear': 'Clear selection',
+    'pick.tip': 'Pick from speakers in this room\'s CHAT.md (multi-select; separate with ", ")', 'pick.all': '所有人(Everyone)', 'pick.clear': 'Clear selection',
     'ph.from': 'Custom sender', 'ph.to': 'Everyone', 'ph.subject': 'Leave empty to use first line', 'ph.session': 'Read-only by default: click a post title to fill; check "New Tag" to type a new short name',
     'ph.reply': 'No.', 'ph.msg': 'Type your message, Ctrl/⌘+Enter to send…',
     'ph.msg.touch': 'Type your message…',   // ≤640px (touch): no Ctrl/Cmd key on mobile keyboards
@@ -612,10 +612,11 @@ function histRender(id){
 // ---- 「收件人」从 CHAT.md 的发言用户中选（2026-09-20 用户要求，**可多选**）----
 // 名单**就地取**自页面已解析的块（`allParsed()` ⇒ `blocks[].speaker`），**不新增后端接口**，
 // 也不读归档（读法口径：只读 CHAT.md）。与 ▾「历史输入」并存：▾ = 最近用过的值，👥 = 本房出现过的发言人。
-// 多值写法遵循技能口径：**`+` 分隔**；「所有人」与具体人**互斥**（选中具体人即自动去掉「所有人」）。
+// 多值写法遵循技能口径：**「英文逗号 + 空格」（`, `）分隔**，如 `AAA, BBB, CCC`（**不用 `+`**，2026-09-20 用户定）；
+// 「所有人」与具体人**互斥**（选中具体人即自动去掉「所有人」）。
 // ⚠️ `所有人` 是**写入内容**（`- 收件人：所有人`），不随界面语言变 ⇒ 用常量，不用 t()（英文态也写「所有人」）。
 var PICK_ALL = '所有人';
-var PICK_SEP = '+';
+var PICK_SEP = ', ';
 function pickEls(){
   return { inp: document.getElementById('to'), btn: document.getElementById('toPick'),
            menu: document.getElementById('toPickMenu') };
@@ -631,6 +632,7 @@ function pickNames(){
   });
   return out;
 }
+// 读时容忍历史写法（半角/全角逗号、顿号、加号）；写出一律用英文逗号 + 空格（PICK_SEP）。
 function pickSplit(v){
   return String(v || '').split(/[+＋,，、]/).map(function(x){ return x.trim(); }).filter(Boolean);
 }
