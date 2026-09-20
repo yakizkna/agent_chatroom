@@ -565,9 +565,10 @@ func (h *ChatHandler) resetToOrigin() bool {
 }
 
 // writeBlock 把发言块插到 CHAT.md 最上方，并把块间分隔线整理成固定条数（chatSepLines）。
-// 定位方式：以「当前标号最大的一块」为锚（新发言的 No 正是最大 +1），插到该块**块头行之前**；
+// 定位方式：以「文件里**第一块**（最上方）的块头」为锚，插到该块**块头行之前**（＝置顶）；
 // 找不到块头（空文件等）时插到文件开头。直接按块头行偏移插入、不依赖前导分隔线格式
 // （历史坑：曾用「最后一个 `\n---\n`」定位，整理掉前导空行后新块被插成第二位置 ⇒ 置顶失效）。
+// ⚠️ 锚点**不能**取「标号最大的那一块」——标号与文件位置并不总是单调（见 topBlockHeadPos 注释）。
 func (h *ChatHandler) writeBlock(block string) (bool, string) {
 	cur, err := os.ReadFile(h.file)
 	if err != nil {
@@ -585,18 +586,17 @@ func (h *ChatHandler) writeBlock(block string) (bool, string) {
 	return true, ""
 }
 
-// topBlockHeadPos 返回「标号最大那一块」的块头行行首偏移（插到它之前即置顶）；找不到块头返回 -1。
+// topBlockHeadPos 返回「文件里**第一块**（最上方）发言块的块头行行首偏移」——插到它之前即置顶；
+// 找不到块头（空文件 / 无块）返回 -1。
+// ⚠️ **不要**改成「取标号最大的那一块」：标号与文件位置**并不保证单调**。反例（2026-09-20 ra_chatroom 实测）：
+// 为消除历史重复编号，把两个重复块**原地改号**到当时的最大号 No.257/258（位置不动、仍在中段），
+// 于是「最大号」落在了文件中段 ⇒ 按最大号定位会把新发言（No.259）插进中段、顶部仍是最旧的 No.256，
+// 「最新发言在最上方」失效。置顶的正确锚点 = 第一块块头，与标号无关。
 func (h *ChatHandler) topBlockHeadPos(content string) int {
-	pos := -1
-	maxN := -1
-	for _, m := range chatBlockHeadRE.FindAllStringSubmatchIndex(content, -1) {
-		n, err := strconv.Atoi(content[m[2]:m[3]])
-		if err == nil && n > maxN {
-			maxN = n
-			pos = m[0] // 块头行行首偏移
-		}
+	if m := chatBlockHeadRE.FindStringIndex(content); m != nil {
+		return m[0] // 第一块块头行行首偏移
 	}
-	return pos
+	return -1
 }
 
 // chatSepTail 返回「块尾 → 下一块头」之间的规范填充（末尾不带换行；调用方按需补）。

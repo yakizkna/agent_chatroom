@@ -382,3 +382,41 @@ func TestListArchivesAndArchiveByName(t *testing.T) {
 		}
 	}
 }
+
+// 回归：新发言必须插到**文件最上方**（第一块之前），而不是「标号最大那一块」之前。
+// 2026-09-20 ra_chatroom 事故：为消重复编号把历史块**原地改号**到 No.257/258（位置仍在中段）后，
+// 发 No.259 时被插到 No.258 之前（文件中段）⇒ 顶部仍是最旧的 No.256，「最新发言在最上方」失效。
+func TestWriteBlockGoesToVeryTopNotBeforeMaxNo(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "CHAT.md")
+	h := &ChatHandler{room: "t", dir: dir, file: file}
+
+	mk := func(no int, subject string) string {
+		return fmt.Sprintf("\n---\n\n# T No.%d\n\n- 时间：2026-09-18 00:00:00\n- 收件人：所有人\n- 主题：%s\n\nbody\n", no, subject)
+	}
+	// 顶部 = 真正最新（No.256）；中段藏一个「原地改号」的高号块 No.258（标号与位置不单调）。
+	before := mk(256, "top") + mk(199, "mid") + mk(258, "renumbered-in-place")
+	if err := os.WriteFile(file, []byte(strings.TrimLeft(before, "\n")), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if ok, errStr := h.writeBlock(mk(259, "brand-new")); !ok {
+		t.Fatalf("writeBlock 失败：%s", errStr)
+	}
+	got, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	heads := chatBlockHeadRE.FindAllString(string(got), -1)
+	if len(heads) != 4 {
+		t.Fatalf("块数应为 4，实际 %d：%v", len(heads), heads)
+	}
+	if !strings.Contains(heads[0], "No.259") {
+		t.Errorf("新发言应置顶（首个块头 = No.259），实际首块头 %q；全部块头 %v", heads[0], heads)
+	}
+	if i := strings.Index(string(got), "# T No.259"); i < 0 {
+		t.Errorf("找不到新块 No.259")
+	} else if j := strings.Index(string(got), "# T No.256"); j >= 0 && j < i {
+		t.Errorf("No.259 应排在 No.256 之前（pos259=%d pos256=%d）", i, j)
+	}
+}
