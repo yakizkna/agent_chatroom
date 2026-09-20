@@ -59,6 +59,11 @@
   .panel .histmenu .hi:hover { background:#222834; color:#fff; }
   .panel .histmenu .hi.clr { color:var(--soft); font-size:12px; margin-top:2px;
                              border-top:1px solid var(--line); border-radius:0 0 6px 6px; }
+  /* 「收件人」发言用户多选（2026-09-20）：每行 = 复选框 + 名字（复用 .hi 的整行点击区与 hover） */
+  .panel .histmenu .hi.pick { display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .panel .histmenu .hi.pick input { flex:none; width:14px; height:14px; margin:0; accent-color:var(--acc); }
+  .panel .histmenu .hi.pick span { flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .panel .pickbtn.on { font-size:12px; }   /* 👥 是 emoji、字形本身偏大 ⇒ 12px 与 ▾（11px）视觉等观 */
   .panel .row { display:flex; gap:12px; margin-bottom:12px; }
   .panel .row .wide { flex:1; }
   input, textarea#msg { flex:1; background:#0b0d12; color:var(--ink); border:1px solid var(--line);
@@ -251,7 +256,7 @@
   <!-- 第一行：发件人 / 收件人 / 抄送（三者同宽）+ 主题 -->
   <div class="panel">
     <label class="fld"><span class="lbl" data-i18n="fld.from">发件人</span><input id="from" class="eq" type="text" autocomplete="off"></label>
-    <label class="fld"><span class="lbl" data-i18n="fld.to">收件人</span><input id="to" class="eq" type="text" autocomplete="off"><button type="button" class="hist" id="toHist" aria-haspopup="listbox" aria-expanded="false">▾</button><span class="histmenu" id="toMenu" hidden></span></label>
+    <label class="fld"><span class="lbl" data-i18n="fld.to">收件人</span><input id="to" class="eq" type="text" autocomplete="off"><button type="button" class="hist" id="toHist" aria-haspopup="listbox" aria-expanded="false">▾</button><button type="button" class="hist pickbtn" id="toPick" aria-haspopup="listbox" aria-expanded="false">👥</button><span class="histmenu" id="toMenu" hidden></span><span class="histmenu" id="toPickMenu" hidden></span></label>
     <label class="fld" id="ccLbl"><span class="lbl" data-i18n="fld.cc">抄送</span><input id="cc" class="eq" type="text" autocomplete="off"><button type="button" class="hist" id="ccHist" aria-haspopup="listbox" aria-expanded="false">▾</button><span class="histmenu" id="ccMenu" hidden></span></label>
     <label class="fld grow"><span class="lbl" data-i18n="fld.subject">主题</span><input id="subject" type="text" autocomplete="off"></label>
   </div>
@@ -313,6 +318,7 @@ var I18N = {
     'speak': '发言', 'update': '刷新', 'loading': '加载中…',
     'btn.auto': '自动刷新', 'btn.auto.tip': '每 %s 秒自动拉取最新发言；页面切到后台时暂停，回到前台立即补刷一次',
     'hist.tip': '历史输入：点这里快选（发言成功后自动记录最近 8 条）', 'hist.clear': '清空历史',
+    'pick.tip': '从本房 CHAT.md 的发言用户中选择（可多选，多个用 + 分隔）', 'pick.all': '所有人', 'pick.clear': '清空选择',
     'ph.from': '发件人自定义', 'ph.to': '所有人', 'ph.subject': '留空取正文首行', 'ph.session': '默认只读：点上一条标题自动填；勾选「创建Tag」后可填新短名（如 cup-quota-0917）',
     'ph.reply': '编号', 'ph.msg': '输入要说的话，Ctrl/⌘+回车 发送…',
     'ph.msg.touch': '输入要说的话…',   // ≤640px（触屏）：键盘没有 Ctrl/⌘ ⇒ 不提示快捷键
@@ -361,6 +367,7 @@ var I18N = {
     'speak': 'Post', 'update': 'Refresh', 'loading': 'Loading…',
     'btn.auto': 'Auto refresh', 'btn.auto.tip': 'Pull the latest posts every %s s; paused while the page is hidden, one catch-up refresh when you return',
     'hist.tip': 'Recent entries: click to pick (last 8 saved after each successful post)', 'hist.clear': 'Clear history',
+    'pick.tip': 'Pick from speakers in this room\'s CHAT.md (multi-select, joined with +)', 'pick.all': '所有人(Everyone)', 'pick.clear': 'Clear selection',
     'ph.from': 'Custom sender', 'ph.to': 'Everyone', 'ph.subject': 'Leave empty to use first line', 'ph.session': 'Read-only by default: click a post title to fill; check "New Tag" to type a new short name',
     'ph.reply': 'No.', 'ph.msg': 'Type your message, Ctrl/⌘+Enter to send…',
     'ph.msg.touch': 'Type your message…',   // ≤640px (touch): no Ctrl/Cmd key on mobile keyboards
@@ -602,22 +609,121 @@ function histRender(id){
   c.addEventListener('click', function(){ histClear(id); });
   e.menu.appendChild(c);
 }
+// ---- 「收件人」从 CHAT.md 的发言用户中选（2026-09-20 用户要求，**可多选**）----
+// 名单**就地取**自页面已解析的块（`allParsed()` ⇒ `blocks[].speaker`），**不新增后端接口**，
+// 也不读归档（读法口径：只读 CHAT.md）。与 ▾「历史输入」并存：▾ = 最近用过的值，👥 = 本房出现过的发言人。
+// 多值写法遵循技能口径：**`+` 分隔**；「所有人」与具体人**互斥**（选中具体人即自动去掉「所有人」）。
+// ⚠️ `所有人` 是**写入内容**（`- 收件人：所有人`），不随界面语言变 ⇒ 用常量，不用 t()（英文态也写「所有人」）。
+var PICK_ALL = '所有人';
+var PICK_SEP = '+';
+function pickEls(){
+  return { inp: document.getElementById('to'), btn: document.getElementById('toPick'),
+           menu: document.getElementById('toPickMenu') };
+}
+function pickNames(){
+  var blocks = [];
+  try { blocks = (allParsed() || {}).blocks || []; } catch (e) { blocks = []; }
+  var seen = {}, out = [];
+  blocks.forEach(function(b){
+    var s = String((b && b.speaker) || '').trim();
+    if(!s || seen[s]) return;
+    seen[s] = 1; out.push(s);                       // blocks 已是「新 → 旧」⇒ 名单按最近发言在前
+  });
+  return out;
+}
+function pickSplit(v){
+  return String(v || '').split(/[+＋,，、]/).map(function(x){ return x.trim(); }).filter(Boolean);
+}
+function pickClose(){
+  var e = pickEls();
+  if(e.menu) e.menu.hidden = true;
+  if(e.btn) e.btn.setAttribute('aria-expanded', 'false');
+}
+function pickRender(){
+  var e = pickEls();
+  if(!e.menu || !e.btn || !e.inp) return;
+  var names = pickNames();
+  e.btn.classList.toggle('on', names.length > 0);   // 无发言人 ⇒ 不显示（不占位）
+  if(!names.length){ pickClose(); return; }
+  e.btn.title = t('pick.tip');
+  var cur = pickSplit(e.inp.value), allOnly = (cur.length === 1 && cur[0] === PICK_ALL);
+  e.menu.innerHTML = '';
+  function row(name, isAll){
+    var line = document.createElement('div');       // ⚠️ 不用 <label>：外层 .fld 本身就是 label，嵌套会有歧义
+    line.className = 'hi pick';
+    line.setAttribute('data-name', name);           // pickSync 就地同步勾选态用
+    if(isAll) line.setAttribute('data-all', '1');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = isAll ? allOnly : (!allOnly && cur.indexOf(name) >= 0);
+    var txt = document.createElement('span');
+    txt.textContent = name; txt.title = name;
+    line.appendChild(cb); line.appendChild(txt);
+    cb.addEventListener('change', function(){
+      if(isAll){ e.inp.value = cb.checked ? PICK_ALL : ''; }
+      else {
+        var rest = pickSplit(e.inp.value).filter(function(x){ return x !== PICK_ALL; });
+        if(cb.checked){ if(rest.indexOf(name) < 0) rest.push(name); }
+        else { rest = rest.filter(function(x){ return x !== name; }); }
+        e.inp.value = rest.join(PICK_SEP);
+      }
+      pickSync();                                   // ⚠️ 只就地同步勾选态，**不能重建菜单**：
+                                                    // 重建会把本次点击的节点 detach ⇒ 文档级 click 的 `closest('.panel .fld')` 得 null
+                                                    // ⇒ 被误判成「点在外面」而收起菜单（多选根本用不了）。
+    });
+    line.addEventListener('click', function(ev){
+      if(ev.target === cb) return;
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event('change'));
+    });
+    e.menu.appendChild(line);
+  }
+  row(t('pick.all'), true);
+  names.forEach(function(n){ row(n, false); });
+  var c = document.createElement('button');
+  c.type = 'button'; c.className = 'hi clr'; c.textContent = t('pick.clear');
+  c.addEventListener('click', function(){ e.inp.value = ''; pickSync(); });
+  e.menu.appendChild(c);
+}
+// 就地同步各行的勾选态（不重建 DOM）—— 见 row() 里 change 的注释：重建会 detach 目标、让菜单被误收起。
+function pickSync(){
+  var e = pickEls();
+  if(!e.menu) return;
+  var cur = pickSplit(e.inp.value), allOnly = (cur.length === 1 && cur[0] === PICK_ALL);
+  Array.prototype.forEach.call(e.menu.querySelectorAll('.hi.pick'), function(line){
+    var cb = line.querySelector('input');
+    if(!cb) return;
+    var isAll = line.getAttribute('data-all') === '1';
+    var nm = line.getAttribute('data-name') || '';
+    cb.checked = isAll ? allOnly : (!allOnly && cur.indexOf(nm) >= 0);
+  });
+}
 ['to','cc'].forEach(function(id){
   var e = histEls(id);
   if(!e.btn) return;
   e.btn.addEventListener('click', function(){
     var wasOpen = !e.menu.hidden;
-    histCloseAll();
+    histCloseAll(); pickClose();                    // 两个菜单同时只开一个
     if(!wasOpen){ e.menu.hidden = false; e.btn.setAttribute('aria-expanded', 'true'); }
   });
 });
+(function(){
+  var e = pickEls();
+  if(!e.btn || !e.menu) return;
+  e.btn.addEventListener('click', function(){
+    var wasOpen = !e.menu.hidden;
+    histCloseAll(); pickClose();
+    if(!wasOpen){ pickRender(); e.menu.hidden = false; e.btn.setAttribute('aria-expanded', 'true'); }
+  });
+  if(e.inp) e.inp.addEventListener('input', pickSync);   // 手输/粘贴 收件人 时同步勾选态
+})();
 // 点字段/菜单之外、或按 Esc ⇒ 收起（同时只开一个）
 document.addEventListener('click', function(ev){
   if(ev.target && ev.target.closest && ev.target.closest('.panel .fld')) return;
-  histCloseAll();
+  histCloseAll(); pickClose();
 });
-document.addEventListener('keydown', function(ev){ if(ev.key === 'Escape') histCloseAll(); });
-histRender('to'); histRender('cc');
+document.addEventListener('keydown', function(ev){ if(ev.key === 'Escape'){ histCloseAll(); pickClose(); } });
+histRender('to'); histRender('cc'); pickRender();
 
 // 用后端返回的聊天室列表渲染下拉框；选中项缺失时回退到首个聊天室。
 function renderRooms(list, cur){
@@ -1067,6 +1173,7 @@ function paint(){
   var fTotal = filterTag ? p.blocks.filter(function(b){ return b.tag === filterTag; }).length : 0;
   box.innerHTML = renderChat(rawMd, filterTag, { filterCount: fTotal });
   applyDefault(p);
+  pickRender();                     // 每次重绘后刷新「收件人 → 发言用户」名单（房间切换 / 新发言后）
 }
 
 function warnTag(){
