@@ -695,22 +695,24 @@ func chatBlockFromPart(part string) string {
 	return "\n---\n\n" + p + "\n"
 }
 
-// 归档阈值（**批量归档**，2026-09-18 用户定）：
-//   - 主文件 `CHAT.md` **最多保留 chatKeepMax = 200 条**；一旦到达，就**一次性把最旧的
-//     (现条数 − chatKeepMin) ≈ 100 条批量搬进归档**，主文件回落到 chatKeepMin = 100 条。
+// 归档阈值（**批量归档**，2026-09-18 用户定；归档文件必满 100 条整，2026-09-21 用户定）：
+//   - 主文件 `CHAT.md` **最多保留 chatKeepMax = 200 条**；一旦到达，就批量把**最旧的
+//     整段满 100 条的编号段**搬进归档，主文件回落到 100~200 条之间。
+//   - 归档文件**必满 100 条整**：段 k 对应 No.(100k-99)~No.(100k)，只有该区间 100 个编号
+//     全部齐（本次溢出 ∪ 归档文件已有）才写入；未满段的块一律留主档，不产生半截归档文件。
 //   - ⚠️ 历史教训（别再改回「到 100 就触发」）：阈值原本等于 100 ⇒ 稳态下**每发一贴只多 1 块**，
 //     于是**每一贴**都要：读归档 → 规范化 → 重写归档 → 连归档一起 commit/push
 //     （实测最近 20 个提交里 19 个动到归档；并发发言时归档文件是最容易冲突的那个）。
 //     归档本该是「**写一次就冻结的历史**」—— 批量搬把归档写次数从「每贴 1 次」降到「每 ~100 贴 1 次」。
 const (
-	chatKeepMin = 100 // 归档后主文件保留的条数（= 每次批量归档的目标）
+	chatKeepMin = 100 // 主文件至少保留的最近条数（+ 未满段块 → 主档落在 100~200 之间）
 	chatKeepMax = 200 // 触发批量归档的上限：不超过它一律不动
 )
 
 // archiveOverflow 把 CHAT.md 中**超过 chatKeepMax 的部分**批量归档到 CHAT_ARCHIVE_<k>.md。
-// 约定见聊天室仓库 README「归档」一节：主文件保留最近 chatKeepMin(100)…chatKeepMax(200) 条；
-// 到达上限时把最旧的 ≈100 条**一次**搬走；归档 _<k> 收纳 No.(100k-99)…No.(100k)（批量后边界可能略有出入）；
-// 归档内保持「新→旧」（顶部最新），块内容原样保留。
+// 约定见聊天室仓库 README「归档」一节：主文件保留最近 100~200 条；
+// 到达上限时只搬**整段满 100 条**的编号段（段 k 收纳 No.(100k-99)…No.(100k)，必满 100 条整），
+// 未满段的块留在主档；归档内保持「新→旧」（顶部最新），块内容原样保留。
 // 返回本次改动到的归档文件相对名（供调用方一并 git add）；出错时第二个返回值非空。
 func (h *ChatHandler) archiveOverflow() ([]string, string) {
 	raw, err := os.ReadFile(h.file)
@@ -737,9 +739,9 @@ func (h *ChatHandler) archiveOverflow() ([]string, string) {
 		blocks = append(blocks, data[l[0]:end])
 	}
 	kept := blocks[:chatKeepMin]        // 主文件保留的最近 100 条（最新在首）
-	overflow := blocks[chatKeepMin:]    // 超出的旧块（批量：通常 ≈100 条一起搬）
+	overflow := blocks[chatKeepMin:]    // 超出的旧块（通常 ≈100 条）
 
-	byArch := map[int][]string{} // k -> 块正文（旧→新，与 CHAT.md 同序）
+	byArch := map[int][]string{} // k -> 块正文（新→旧，与 CHAT.md 同序）
 	var stay []string
 	for _, body := range overflow {
 		no := 0
@@ -756,8 +758,37 @@ func (h *ChatHandler) archiveOverflow() ([]string, string) {
 		byArch[k] = append(byArch[k], body)
 	}
 
+	// 2026-09-21 用户定「每个归档文件必满 100 条整」：段 k 对应 No.(100k-99)~No.(100k)，
+	// 只有该区间 **100 个编号全部齐**（本次溢出 ∪ 归档文件已有）才写入归档；
+	// 未满段的块一律留主档（主档随之在 100~200 条之间浮动），不产生半截归档文件。
+	archNo := func(s string) int {
+		if m := chatNoRE.FindStringSubmatch(s); m != nil {
+			if n, e := strconv.Atoi(m[1]); e == nil {
+				return n
+			}
+		}
+		return 0
+	}
+	partial := map[int][]string{} // 未满段：k -> 块（稍后按 k 降序留在主档）
 	touched := []string{}
 	for k, bodies := range byArch {
+		seen := map[int]bool{} // 该段已有的不同编号
+		for _, b := range bodies {
+			if n := archNo(b); n != 0 && (n-1)/100+1 == k {
+				seen[n] = true
+			}
+		}
+		if d, e := os.ReadFile(filepath.Join(h.dir, fmt.Sprintf("CHAT_ARCHIVE_%d.md", k))); e == nil {
+			for _, m := range chatNoRE.FindAllStringSubmatch(string(d), -1) {
+				if n, e := strconv.Atoi(m[1]); e == nil && (n-1)/100+1 == k {
+					seen[n] = true
+				}
+			}
+		}
+		if len(seen) < 100 { // 未满段：留主档，等该段 100 个编号齐了再归档
+			partial[k] = bodies
+			continue
+		}
 		fname := fmt.Sprintf("CHAT_ARCHIVE_%d.md", k)
 		path := filepath.Join(h.dir, fname)
 		existing := ""
@@ -773,6 +804,15 @@ func (h *ChatHandler) archiveOverflow() ([]string, string) {
 			return touched, "写入归档失败：" + err.Error()
 		}
 		touched = append(touched, fname)
+	}
+	// 未满段按 k 降序（新→旧）留主档
+	partialKs := make([]int, 0, len(partial))
+	for k := range partial {
+		partialKs = append(partialKs, k)
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(partialKs)))
+	for _, k := range partialKs {
+		stay = append(stay, partial[k]...)
 	}
 
 	var sb strings.Builder
@@ -804,8 +844,8 @@ func (h *ChatHandler) ArchiveIfNeeded(dryRun bool) (string, error) {
 		return fmt.Sprintf("%s：%d 条（≤%d，无需归档）", h.room, n, chatKeepMax), nil
 	}
 	if dryRun {
-		return fmt.Sprintf("%s：【dry】%d 条 → 将搬走最旧 %d 条，主文件回落到 %d 条",
-			h.room, n, n-chatKeepMin, chatKeepMin), nil
+		return fmt.Sprintf("%s：【dry】%d 条（>%d）→ 按「整段满 100 条」搬最旧满段，未满段留主档（主档保持 100~200 条）",
+			h.room, n, chatKeepMax), nil
 	}
 	// 先同步远端：房间随时有他人发言，落后状态下归档后 push 很可能被拒
 	if rc, out := h.git("pull", "--rebase", "origin", "master"); rc != 0 {
@@ -823,8 +863,8 @@ func (h *ChatHandler) ArchiveIfNeeded(dryRun bool) (string, error) {
 	if rc, out := h.git(addArgs...); rc != 0 {
 		return "", fmt.Errorf("git add 失败：%s", out)
 	}
-	commitMsg := fmt.Sprintf("chore(archive): 批量归档（主文件回落至 %d 条）—— %s",
-		chatKeepMin, strings.Join(touched, ", "))
+	commitMsg := fmt.Sprintf("chore(archive): 批量归档满段（主档回落至 100~200 条）—— %s",
+		strings.Join(touched, ", "))
 	if rc, out := h.git("commit", "-m", commitMsg); rc != 0 {
 		return "", fmt.Errorf("git commit 失败：%s", out)
 	}

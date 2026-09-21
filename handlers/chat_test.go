@@ -209,7 +209,7 @@ func TestArchiveIfNeededNoopAndDry(t *testing.T) {
 		t.Errorf("无需归档时不应改写 CHAT.md")
 	}
 
-	// 210 条 ⇒ dry 预报「搬走最旧 110 条、回落 100 条」，且**不落盘、不产生归档文件**
+	// 210 条 ⇒ dry 预报「按整段满 100 条归档、未满段留主档」，且**不落盘、不产生归档文件**
 	if err := os.WriteFile(file, []byte(mk(210)), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestArchiveIfNeededNoopAndDry(t *testing.T) {
 	if err3 != nil {
 		t.Fatalf("dry 不应报错：%v", err3)
 	}
-	if !strings.Contains(line3, "将搬走最旧 110 条") || !strings.Contains(line3, "回落到 100 条") {
+	if !strings.Contains(line3, "整段满 100 条") || !strings.Contains(line3, "100~200 条") {
 		t.Errorf("dry 预报不符：%q", line3)
 	}
 	if after2, _ := os.ReadFile(file); string(after2) != string(before2) {
@@ -278,7 +278,8 @@ func TestArchiveOverflowBatches(t *testing.T) {
 	}
 	arch1, arch2, arch3 := filepath.Join(dir, "CHAT_ARCHIVE_1.md"), filepath.Join(dir, "CHAT_ARCHIVE_2.md"), filepath.Join(dir, "CHAT_ARCHIVE_3.md")
 
-	// ① 201 条 ⇒ 触发批量：保留最新 100（No.102–201），一次搬走 101 条（No.1–100 → _1、No.101 → _2）
+	// ① 201 条 ⇒ 触发批量：保留最新 100（No.102–201），溢出 No.1–101；
+	//    段 1（No.1–100）满 100 → _1=100 条；段 2 仅 No.101 未满 → 留主档（主档 101 条，在 100~200 内）
 	if err := os.WriteFile(file, []byte(mk(201, 1)), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -289,52 +290,53 @@ func TestArchiveOverflowBatches(t *testing.T) {
 	if len(touched) == 0 {
 		t.Fatal("201 条时应触发批量归档，实际没动")
 	}
-	if n, lo, hi := span(file); n != 100 || lo != 102 || hi != 201 {
-		t.Errorf("主文件应保留 100 条（No.102–201），实际 %d 条（No.%d–%d）", n, lo, hi)
+	if n, lo, hi := span(file); n != 101 || lo != 101 || hi != 201 {
+		t.Errorf("主文件应保留 101 条（No.101–201），实际 %d 条（No.%d–%d）", n, lo, hi)
 	}
 	if n, lo, hi := span(arch1); n != 100 || lo != 1 || hi != 100 {
 		t.Errorf("_1 应 100 条（No.1–100），实际 %d 条（No.%d–%d）", n, lo, hi)
 	}
-	if n, lo, hi := span(arch2); n != 1 || lo != 101 || hi != 101 {
-		t.Errorf("_2 应 1 条（No.101），实际 %d 条（No.%d–%d）", n, lo, hi)
+	if _, err := os.Stat(arch2); err == nil {
+		t.Errorf("_2 未满段（仅 No.101）不应创建，实际存在")
 	}
 	kept, _ := os.ReadFile(file)
-	if !strings.Contains(string(kept), "No.201") || strings.Contains(string(kept), "No.101\n") {
-		t.Errorf("保留的应是 No.102–201（边界不符）")
+	if !strings.Contains(string(kept), "No.201") || !strings.Contains(string(kept), "No.101\n") {
+		t.Errorf("保留的应是 No.101–201（未满段 No.101 留主档）")
 	}
 
-	// ② 101 条（相当于新发 1 贴）⇒ **不触发**（这就是「不再每贴重写归档」的保证）
+	// ② 102 条（相当于新发 1 贴）⇒ **不触发**（这就是「不再每贴重写归档」的保证）
 	one, _ := os.ReadFile(file)
 	if err := os.WriteFile(file, []byte(mk(202, 202)+string(one)), 0644); err != nil {
 		t.Fatal(err)
 	}
 	a1before, _ := os.ReadFile(arch1)
 	if touched, msg = h.archiveOverflow(); msg != "" || touched != nil {
-		t.Errorf("101 条不应触发归档，实际 touched=%v msg=%q", touched, msg)
+		t.Errorf("102 条不应触发归档，实际 touched=%v msg=%q", touched, msg)
 	}
 	if a1after, _ := os.ReadFile(arch1); string(a1after) != string(a1before) {
-		t.Errorf("101 条时归档不应被改写")
+		t.Errorf("102 条时归档不应被改写")
 	}
-	if n := count(file); n != 101 {
-		t.Errorf("应保持 101 条，实际 %d", n)
+	if n := count(file); n != 102 {
+		t.Errorf("应保持 102 条，实际 %d", n)
 	}
 
-	// ③ 再加 100 条（共 201）⇒ 再触发一次批量：主文件回落 100，_1 保持不动，_2 收 No.101–202
+	// ③ 再加 100 条（共 202）⇒ 再触发：段 2（No.101–200）满 100 → _2=100 条；
+	//    段 3 仅 No.201–202 未满 → 留主档（主档 102 条，No.201–302）
 	cur, _ := os.ReadFile(file)
 	if err := os.WriteFile(file, []byte(mk(302, 203)+string(cur)), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if touched, msg = h.archiveOverflow(); msg != "" || len(touched) == 0 {
-		t.Fatalf("201 条应再次触发批量，实际 touched=%v msg=%q", touched, msg)
+		t.Fatalf("202 条应再次触发批量，实际 touched=%v msg=%q", touched, msg)
 	}
-	if n, lo, hi := span(file); n != 100 || lo != 203 || hi != 302 {
-		t.Errorf("主文件应再次回落到 100 条（No.203–302），实际 %d 条（No.%d–%d）", n, lo, hi)
+	if n, lo, hi := span(file); n != 102 || lo != 201 || hi != 302 {
+		t.Errorf("主文件应保留 102 条（No.201–302），实际 %d 条（No.%d–%d）", n, lo, hi)
 	}
 	if n, lo, hi := span(arch2); n != 100 || lo != 101 || hi != 200 {
 		t.Errorf("_2 应补满为 100 条（No.101–200），实际 %d 条（No.%d–%d）", n, lo, hi)
 	}
-	if n, lo, hi := span(arch3); n != 2 || lo != 201 || hi != 202 {
-		t.Errorf("_3 应收 2 条（No.201–202），实际 %d 条（No.%d–%d）", n, lo, hi)
+	if _, err := os.Stat(arch3); err == nil {
+		t.Errorf("_3 未满段（仅 No.201–202）不应创建，实际存在")
 	}
 	if a1after, _ := os.ReadFile(arch1); string(a1after) != string(a1before) {
 		t.Errorf("_1 已满，不应再被改写（批量归档的意义）")
